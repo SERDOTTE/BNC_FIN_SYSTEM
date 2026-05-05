@@ -1,0 +1,129 @@
+import { DashboardDailyFlowChart } from "@/components/dashboard-daily-flow-chart";
+import { PageHeader } from "@/components/page-header";
+import { SectionCard } from "@/components/section-card";
+import { StatCard } from "@/components/stat-card";
+import { formatCurrency, formatDate } from "@/lib/formatters";
+import { buildDailyCashFlow, buildDashboardData } from "@/lib/server/loaders";
+
+export default async function HomePage() {
+  const now = new Date();
+  const month = now.getMonth() + 1;
+  const year = now.getFullYear();
+
+  const [dashboard, dailyFlow] = await Promise.all([
+    buildDashboardData(),
+    buildDailyCashFlow(month, year)
+  ]);
+
+  return (
+    <div className="page">
+      <section className="hero">
+        <div>
+          <PageHeader
+            title="Controle Financeiro"
+            description="Visão consolidada do caixa atual, entradas futuras, saídas previstas e exposição em USD para apoiar decisão operacional diária."
+          />
+          <div className="cta-row">
+            <span className="chip positive">Caixa real atualizado</span>
+            <span className="chip warning">Projeção por cenário ativo</span>
+          </div>
+        </div>
+        <div className="summary-card">
+          <span className="subtle">Saldo de fechamento previsto em 30 dias</span>
+          <strong>{formatCurrency(dashboard.projectedClosingBalance, "BRL")}</strong>
+          <div className="kpi-list">
+            <div className="kpi-row">
+              <span className="subtle">Recebimentos a vencer</span>
+              <span>{formatCurrency(dashboard.futureInflow, "BRL")}</span>
+            </div>
+            <div className="kpi-row">
+              <span className="subtle">Pagamentos a vencer</span>
+              <span>{formatCurrency(dashboard.futureOutflow, "BRL")}</span>
+            </div>
+            <div className="kpi-row">
+              <span className="subtle">Exposição cambial líquida</span>
+              <span>{formatCurrency(dashboard.netUsdExposure, "USD")}</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <SectionCard
+        title="Fluxo de caixa do mês"
+        description="Selecione o mês/ano para visualizar o comportamento diário das entradas (azul) e saídas (vermelho)."
+      >
+        <DashboardDailyFlowChart initialData={dailyFlow} initialMonth={month} initialYear={year} />
+      </SectionCard>
+
+      <section className="stats-grid">
+        <StatCard title="Caixa atual" value={formatCurrency(dashboard.currentCash, "BRL")} tone="positive" caption="Somente transações realizadas" />
+        <StatCard title="Fluxo projetado" value={formatCurrency(dashboard.projectedNet, "BRL")} tone={dashboard.projectedNet >= 0 ? "positive" : "danger"} caption="Janela de 30 dias" />
+        <StatCard title="Inadimplência" value={`${dashboard.overdueInstallments} parcelas`} tone="warning" caption="Parcela ou payable vencido" />
+        <StatCard title="Taxa USD/BRL" value={dashboard.currentUsdRate.toFixed(2)} tone="warning" caption="Referência mais recente" />
+      </section>
+
+      <section className="two-col">
+        <SectionCard title="Eventos prioritários" description="Fila operacional para o time financeiro atuar hoje.">
+          <table>
+            <thead>
+              <tr>
+                <th>Tema</th>
+                <th>Vencimento</th>
+                <th>Valor</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {dashboard.attentionItems.map((item) => (
+                <tr key={item.id}>
+                  <td>
+                    <strong>{item.title}</strong>
+                    <div className="subtle">{item.description}</div>
+                  </td>
+                  <td>{formatDate(item.dueDate)}</td>
+                  <td className={`money ${item.amount >= 0 ? "positive" : "negative"}`}>
+                    {formatCurrency(Math.abs(item.amount), item.currency)}
+                  </td>
+                  <td>
+                    <span className={`chip ${item.level}`}>{item.label}</span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </SectionCard>
+
+        <SectionCard title="Leitura de cenário" description="Como o câmbio futuro altera o caixa esperado.">
+          <div className="kpi-list">
+            {dashboard.scenarios.map((scenario) => (
+              <div className="kpi-row" key={scenario.name}>
+                <div>
+                  <strong>{scenario.name}</strong>
+                  <div className="subtle">USD/BRL {scenario.rate.toFixed(2)}</div>
+                </div>
+                <div className={`money ${scenario.projectedNet >= 0 ? "positive" : "negative"}`}>
+                  {formatCurrency(scenario.projectedNet, "BRL")}
+                </div>
+              </div>
+            ))}
+          </div>
+        </SectionCard>
+      </section>
+
+      <SectionCard title="Linha do tempo do caixa" description="Eventos de entrada e saída que moldam a posição projetada.">
+        <div className="timeline">
+          {dashboard.cashTimeline.map((item) => (
+            <div className="timeline-item" key={item.id}>
+              <strong>{item.title}</strong>
+              <span className="subtle">{formatDate(item.date)} · {item.description}</span>
+              <span className={`money ${item.amount >= 0 ? "positive" : "negative"}`}>
+                {formatCurrency(item.amount, item.currency)}
+              </span>
+            </div>
+          ))}
+        </div>
+      </SectionCard>
+
+    </div>
+  );
+}

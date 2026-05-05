@@ -1,0 +1,769 @@
+openapi: 3.0.3
+info:
+  title: BNC Financial Flow API
+  version: 1.0.0
+  description: |
+    API para fluxo de caixa (realizado e projetado), contas a receber/pagar,
+    multi-moeda e operações idempotentes de pagamento.
+
+servers:
+  - url: https://api.seudominio.com
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Accounts
+  - name: Receivables
+  - name: Installments
+  - name: Payables
+  - name: Transactions
+  - name: Reports
+
+paths:
+  /v1/accounts:
+    post:
+      tags: [Accounts]
+      summary: Criar conta financeira
+      operationId: createAccount
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAccountRequest'
+      responses:
+        '201':
+          description: Conta criada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountResponse'
+    get:
+      tags: [Accounts]
+      summary: Listar contas
+      operationId: listAccounts
+      responses:
+        '200':
+          description: Lista de contas
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AccountResponse'
+
+  /v1/receivables:
+    post:
+      tags: [Receivables]
+      summary: Criar contas a receber com parcelamento automático
+      operationId: createReceivable
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateReceivableRequest'
+      responses:
+        '201':
+          description: Recebível criado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReceivableResponse'
+    get:
+      tags: [Receivables]
+      summary: Listar contas a receber
+      operationId: listReceivables
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/ReceivableStatus'
+      responses:
+        '200':
+          description: Lista de recebíveis
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedReceivablesResponse'
+
+  /v1/receivables/{receivableId}:
+    get:
+      tags: [Receivables]
+      summary: Buscar recebível por ID
+      operationId: getReceivableById
+      parameters:
+        - $ref: '#/components/parameters/ReceivableId'
+      responses:
+        '200':
+          description: Recebível encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReceivableDetailResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /v1/installments:
+    get:
+      tags: [Installments]
+      summary: Listar parcelas
+      operationId: listInstallments
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/InstallmentStatus'
+        - name: dueDateFrom
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: dueDateTo
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Lista de parcelas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedInstallmentsResponse'
+
+  /v1/installments/{installmentId}/pay:
+    post:
+      tags: [Installments]
+      summary: Pagar parcela (idempotente)
+      operationId: payInstallment
+      parameters:
+        - $ref: '#/components/parameters/InstallmentId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PayInstallmentRequest'
+      responses:
+        '200':
+          description: Parcela paga
+          headers:
+            Idempotency-Replayed:
+              schema:
+                type: boolean
+              description: true quando a resposta veio do cache idempotente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentResultResponse'
+        '409':
+          $ref: '#/components/responses/IdempotencyConflict'
+        '422':
+          $ref: '#/components/responses/BusinessRuleViolation'
+
+  /v1/payables:
+    post:
+      tags: [Payables]
+      summary: Criar conta a pagar
+      operationId: createPayable
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePayableRequest'
+      responses:
+        '201':
+          description: Conta a pagar criada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayableResponse'
+    get:
+      tags: [Payables]
+      summary: Listar contas a pagar
+      operationId: listPayables
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/PayableStatus'
+      responses:
+        '200':
+          description: Lista de contas a pagar
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedPayablesResponse'
+
+  /v1/payables/{payableId}/pay:
+    post:
+      tags: [Payables]
+      summary: Pagar conta a pagar (idempotente)
+      operationId: payPayable
+      parameters:
+        - $ref: '#/components/parameters/PayableId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PayPayableRequest'
+      responses:
+        '200':
+          description: Conta a pagar quitada
+          headers:
+            Idempotency-Replayed:
+              schema:
+                type: boolean
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentResultResponse'
+        '409':
+          $ref: '#/components/responses/IdempotencyConflict'
+        '422':
+          $ref: '#/components/responses/BusinessRuleViolation'
+
+  /v1/transactions:
+    get:
+      tags: [Transactions]
+      summary: Listar transações realizadas
+      operationId: listTransactions
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: dateFrom
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: dateTo
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: accountId
+          in: query
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Lista de transações
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedTransactionsResponse'
+
+  /v1/transactions/{transactionId}/reverse:
+    post:
+      tags: [Transactions]
+      summary: Estornar transação realizada
+      operationId: reverseTransaction
+      parameters:
+        - $ref: '#/components/parameters/TransactionId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReverseTransactionRequest'
+      responses:
+        '201':
+          description: Estorno criado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionResponse'
+        '409':
+          $ref: '#/components/responses/IdempotencyConflict'
+        '422':
+          $ref: '#/components/responses/BusinessRuleViolation'
+
+  /v1/reports/cash-flow:
+    get:
+      tags: [Reports]
+      summary: Fluxo de caixa realizado e projetado
+      operationId: getCashFlowReport
+      parameters:
+        - name: start
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: end
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: currency
+          in: query
+          required: true
+          schema:
+            type: string
+            pattern: '^[A-Z]{3}$'
+        - name: includeProjected
+          in: query
+          schema:
+            type: boolean
+            default: true
+      responses:
+        '200':
+          description: Relatorio de fluxo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CashFlowReportResponse'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    Page:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    PageSize:
+      name: pageSize
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 20
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+        minLength: 8
+        maxLength: 120
+    ReceivableId:
+      name: receivableId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    InstallmentId:
+      name: installmentId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    PayableId:
+      name: payableId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    TransactionId:
+      name: transactionId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  responses:
+    NotFound:
+      description: Recurso não encontrado
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    IdempotencyConflict:
+      description: Mesma chave idempotente usada com payload diferente
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    BusinessRuleViolation:
+      description: Regra de negócio violada
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  schemas:
+    AccountType:
+      type: string
+      enum: [BANK, CASH, WALLET, OTHER]
+
+    ReceivableStatus:
+      type: string
+      enum: [OPEN, PARTIALLY_PAID, PAID, OVERDUE, CANCELED]
+
+    InstallmentStatus:
+      type: string
+      enum: [PENDING, PAID, OVERDUE, CANCELED]
+
+    PayableStatus:
+      type: string
+      enum: [PENDING, PAID, OVERDUE, CANCELED]
+
+    CreateAccountRequest:
+      type: object
+      required: [name, type, baseCurrency]
+      properties:
+        name:
+          type: string
+          maxLength: 100
+        type:
+          $ref: '#/components/schemas/AccountType'
+        baseCurrency:
+          type: string
+          pattern: '^[A-Z]{3}$'
+
+    AccountResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        type:
+          $ref: '#/components/schemas/AccountType'
+        baseCurrency:
+          type: string
+
+    CreateReceivableRequest:
+      type: object
+      required:
+        [customerName, totalAmount, currency, saleDate, installmentsCount]
+      properties:
+        customerName:
+          type: string
+          maxLength: 180
+        description:
+          type: string
+        totalAmount:
+          type: number
+          format: double
+          minimum: 0.01
+        currency:
+          type: string
+          pattern: '^[A-Z]{3}$'
+        saleDate:
+          type: string
+          format: date
+        installmentsCount:
+          type: integer
+          minimum: 1
+          maximum: 120
+
+    ReceivableResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/ReceivableStatus'
+        customerName:
+          type: string
+        totalAmount:
+          type: number
+        currency:
+          type: string
+        installmentsCount:
+          type: integer
+
+    ReceivableDetailResponse:
+      allOf:
+        - $ref: '#/components/schemas/ReceivableResponse'
+        - type: object
+          properties:
+            installments:
+              type: array
+              items:
+                $ref: '#/components/schemas/InstallmentResponse'
+
+    InstallmentResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        installmentNumber:
+          type: integer
+        amount:
+          type: number
+        currency:
+          type: string
+        dueDate:
+          type: string
+          format: date
+        status:
+          $ref: '#/components/schemas/InstallmentStatus'
+        paymentDate:
+          type: string
+          format: date-time
+          nullable: true
+
+    CreatePayableRequest:
+      type: object
+      required: [supplierName, amount, currency, dueDate]
+      properties:
+        supplierName:
+          type: string
+          maxLength: 180
+        description:
+          type: string
+        amount:
+          type: number
+          minimum: 0.01
+        currency:
+          type: string
+          pattern: '^[A-Z]{3}$'
+        dueDate:
+          type: string
+          format: date
+
+    PayableResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        supplierName:
+          type: string
+        amount:
+          type: number
+        currency:
+          type: string
+        dueDate:
+          type: string
+          format: date
+        status:
+          $ref: '#/components/schemas/PayableStatus'
+
+    PayInstallmentRequest:
+      type: object
+      required: [accountId, paidAt]
+      properties:
+        accountId:
+          type: string
+          format: uuid
+        paidAt:
+          type: string
+          format: date-time
+        exchangeRateId:
+          type: string
+          format: uuid
+          nullable: true
+        exchangeRate:
+          type: number
+          nullable: true
+          minimum: 0.00000001
+        description:
+          type: string
+
+    PayPayableRequest:
+      type: object
+      required: [accountId, paidAt]
+      properties:
+        accountId:
+          type: string
+          format: uuid
+        paidAt:
+          type: string
+          format: date-time
+        exchangeRateId:
+          type: string
+          format: uuid
+          nullable: true
+        exchangeRate:
+          type: number
+          nullable: true
+          minimum: 0.00000001
+        description:
+          type: string
+
+    ReverseTransactionRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          minLength: 3
+          maxLength: 300
+
+    TransactionResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        direction:
+          type: string
+          enum: [IN, OUT]
+        amountOriginal:
+          type: number
+        currencyOriginal:
+          type: string
+        exchangeRate:
+          type: number
+        amountConverted:
+          type: number
+        currencyConverted:
+          type: string
+        occurredAt:
+          type: string
+          format: date-time
+        originType:
+          type: string
+        originId:
+          type: string
+          format: uuid
+          nullable: true
+        reversalOfTransactionId:
+          type: string
+          format: uuid
+          nullable: true
+
+    PaymentResultResponse:
+      type: object
+      properties:
+        installmentId:
+          type: string
+          format: uuid
+          nullable: true
+        payableId:
+          type: string
+          format: uuid
+          nullable: true
+        transaction:
+          $ref: '#/components/schemas/TransactionResponse'
+
+    CashFlowPoint:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+        totalIn:
+          type: number
+        totalOut:
+          type: number
+        net:
+          type: number
+
+    CashFlowReportResponse:
+      type: object
+      properties:
+        currency:
+          type: string
+        range:
+          type: object
+          properties:
+            start:
+              type: string
+              format: date
+            end:
+              type: string
+              format: date
+        realized:
+          type: array
+          items:
+            $ref: '#/components/schemas/CashFlowPoint'
+        projected:
+          type: array
+          items:
+            $ref: '#/components/schemas/CashFlowPoint'
+
+    PaginatedReceivablesResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReceivableResponse'
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        total:
+          type: integer
+
+    PaginatedInstallmentsResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/InstallmentResponse'
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        total:
+          type: integer
+
+    PaginatedPayablesResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/PayableResponse'
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        total:
+          type: integer
+
+    PaginatedTransactionsResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/TransactionResponse'
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        total:
+          type: integer
+
+    ErrorResponse:
+      type: object
+      properties:
+        code:
+          type: string
+          example: IDEMPOTENCY_CONFLICT
+        message:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
