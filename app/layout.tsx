@@ -4,6 +4,8 @@ import "./globals.css";
 
 import { AppChrome } from "@/components/app-chrome";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "BNC Fin System",
   description: "Controle de fluxo financeiro do caixa: realizado, projeções, recebíveis, pagáveis e exposição cambial."
