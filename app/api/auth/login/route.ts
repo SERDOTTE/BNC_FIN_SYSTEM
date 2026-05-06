@@ -41,24 +41,53 @@ async function validateAgainstSupabase(email: string, password: string) {
     } satisfies AuthValidationResult;
   }
 
-  const response = await fetch(`${baseUrl}/auth/v1/token?grant_type=password`, {
-    method: "POST",
-    headers: {
-      apikey: apiKey,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({ email, password })
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${baseUrl}/auth/v1/token?grant_type=password`, {
+      method: "POST",
+      headers: {
+        apikey: apiKey,
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ email, password })
+    });
+  } catch {
+    return {
+      ok: false,
+      kind: "upstream-error",
+      message: "Nao foi possivel conectar ao Supabase Auth. Verifique URL/rede no ambiente de deploy."
+    } satisfies AuthValidationResult;
+  }
 
   if (response.ok) {
     return { ok: true } satisfies AuthValidationResult;
   }
 
-  if (response.status === 400 || response.status === 401) {
+  const responseText = await response.text().catch(() => "");
+  const normalized = responseText.toLowerCase();
+  const isInvalidCredentials =
+    (response.status === 400 || response.status === 401) &&
+    (normalized.includes("invalid login credentials") ||
+      normalized.includes("invalid credentials") ||
+      normalized.includes("senha") ||
+      normalized.includes("password") ||
+      normalized.includes("credentials"));
+
+  if (isInvalidCredentials) {
     return { ok: false, kind: "invalid-credentials" } satisfies AuthValidationResult;
   }
 
-  const responseText = await response.text().catch(() => "");
+  if (response.status === 400 || response.status === 401) {
+    return {
+      ok: false,
+      kind: "upstream-error",
+      message: responseText
+        ? `Supabase recusou autenticacao: ${response.status} ${responseText}`
+        : `Supabase recusou autenticacao: ${response.status}.`
+    } satisfies AuthValidationResult;
+  }
+
   return {
     ok: false,
     kind: "upstream-error",
