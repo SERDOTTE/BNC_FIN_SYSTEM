@@ -14,11 +14,21 @@ type AuthValidationResult =
   | { ok: false; kind: "upstream-error"; message: string };
 
 function supabaseAuthBaseUrl() {
-  return (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").replace(/\/$/, "").replace(/\/rest\/v1$/i, "");
+  const raw =
+    process.env.NEXT_PUBLIC_SUPABASE_URL ??
+    process.env.SUPABASE_URL ??
+    "";
+
+  return raw.trim().replace(/\/$/, "").replace(/\/rest\/v1$/i, "");
 }
 
 function supabaseAuthApiKey() {
-  return process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+  return (
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    process.env.SUPABASE_ANON_KEY ||
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    ""
+  );
 }
 
 async function validateAgainstSupabase(email: string, password: string) {
@@ -30,6 +40,23 @@ async function validateAgainstSupabase(email: string, password: string) {
       ok: false,
       kind: "misconfigured",
       message: "NEXT_PUBLIC_SUPABASE_URL não configurada no ambiente de deploy."
+    } satisfies AuthValidationResult;
+  }
+
+  try {
+    const parsed = new URL(baseUrl);
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+      return {
+        ok: false,
+        kind: "misconfigured",
+        message: "URL do Supabase invalida. Use http:// ou https:// em NEXT_PUBLIC_SUPABASE_URL/SUPABASE_URL."
+      } satisfies AuthValidationResult;
+    }
+  } catch {
+    return {
+      ok: false,
+      kind: "misconfigured",
+      message: "URL do Supabase invalida. Verifique NEXT_PUBLIC_SUPABASE_URL/SUPABASE_URL no deploy."
     } satisfies AuthValidationResult;
   }
 
