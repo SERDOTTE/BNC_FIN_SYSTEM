@@ -33,7 +33,14 @@ npm run dev
 - Configure `NEXT_PUBLIC_SUPABASE_URL`
 - Configure `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 - Configure `SUPABASE_SERVICE_ROLE_KEY`
+- Configure `APP_AUTH_SECRET` para assinar o cookie de sessão em produção
 - Configure `SUPABASE_COMPANY_ID` se quiser fixar a empresa usada pelas consultas
+
+## Deploy na Vercel
+
+- Cadastre na Vercel as variáveis `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` e `APP_AUTH_SECRET`
+- Se `NEXT_PUBLIC_SUPABASE_ANON_KEY` não estiver definida, o backend tentará usar `SUPABASE_SERVICE_ROLE_KEY` para validar o login
+- Quando faltar configuração do Supabase no deploy, a rota de login responderá erro `503` em vez de `Credenciais inválidas`
 
 ## Estrutura
 

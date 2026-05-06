@@ -7,28 +7,65 @@ type LoginBody = {
   password?: string;
 };
 
+type AuthValidationResult =
+  | { ok: true }
+  | { ok: false; kind: "invalid-credentials" }
+  | { ok: false; kind: "misconfigured"; message: string }
+  | { ok: false; kind: "upstream-error"; message: string };
+
 function supabaseAuthBaseUrl() {
   return (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").replace(/\/$/, "").replace(/\/rest\/v1$/i, "");
 }
 
+function supabaseAuthApiKey() {
+  return process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+}
+
 async function validateAgainstSupabase(email: string, password: string) {
   const baseUrl = supabaseAuthBaseUrl();
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
+  const apiKey = supabaseAuthApiKey();
 
-  if (!baseUrl || !anonKey) {
-    return false;
+  if (!baseUrl) {
+    return {
+      ok: false,
+      kind: "misconfigured",
+      message: "NEXT_PUBLIC_SUPABASE_URL não configurada no ambiente de deploy."
+    } satisfies AuthValidationResult;
+  }
+
+  if (!apiKey) {
+    return {
+      ok: false,
+      kind: "misconfigured",
+      message: "Configure NEXT_PUBLIC_SUPABASE_ANON_KEY ou SUPABASE_SERVICE_ROLE_KEY na Vercel."
+    } satisfies AuthValidationResult;
   }
 
   const response = await fetch(`${baseUrl}/auth/v1/token?grant_type=password`, {
     method: "POST",
     headers: {
-      apikey: anonKey,
+      apikey: apiKey,
       "Content-Type": "application/json"
     },
     body: JSON.stringify({ email, password })
   });
 
-  return response.ok;
+  if (response.ok) {
+    return { ok: true } satisfies AuthValidationResult;
+  }
+
+  if (response.status === 400 || response.status === 401) {
+    return { ok: false, kind: "invalid-credentials" } satisfies AuthValidationResult;
+  }
+
+  const responseText = await response.text().catch(() => "");
+  return {
+    ok: false,
+    kind: "upstream-error",
+    message: responseText
+      ? `Falha na autenticação via Supabase: ${response.status} ${responseText}`
+      : `Falha na autenticação via Supabase: ${response.status}.`
+  } satisfies AuthValidationResult;
 }
 
 function validateAgainstEnv(email: string, password: string) {
@@ -58,9 +95,13 @@ export async function POST(request: NextRequest) {
   }
 
   const envValid = validateAgainstEnv(email, password);
-  const supabaseValid = envValid ? false : await validateAgainstSupabase(email, password);
+  const supabaseResult = envValid ? { ok: false, kind: "invalid-credentials" as const } : await validateAgainstSupabase(email, password);
 
-  if (!envValid && !supabaseValid) {
+  if (!envValid && !supabaseResult.ok) {
+    if (supabaseResult.kind === "misconfigured" || supabaseResult.kind === "upstream-error") {
+      return NextResponse.json({ error: supabaseResult.message }, { status: 503 });
+    }
+
     return NextResponse.json({ error: "Credenciais inválidas." }, { status: 401 });
   }
 
