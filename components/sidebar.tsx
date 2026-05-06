@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -18,9 +19,43 @@ const navItems = [
 
 export function Sidebar() {
   const pathname = usePathname();
+  const [email, setEmail] = useState<string>("");
+
+  useEffect(() => {
+    let active = true;
+
+    fetch("/api/auth/me", { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) {
+          return null;
+        }
+
+        const body = (await response.json().catch(() => ({}))) as { email?: string };
+        return body.email ?? "";
+      })
+      .then((value) => {
+        if (active) {
+          setEmail(value ?? "");
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setEmail("");
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   return (
     <aside className="sidebar">
+      <div className="sidebar-auth-top">
+        <p className="sidebar-welcome">Bem-vindo{email ? `, ${email}` : ""}</p>
+        <LogoutButton />
+      </div>
+
       <div className="brand">
         <h1>Brasileiros no Caribe - Controle Financeiro</h1>
         <p>
@@ -39,10 +74,6 @@ export function Sidebar() {
           );
         })}
       </nav>
-
-      <div className="sidebar-footer">
-        <LogoutButton />
-      </div>
     </aside>
   );
 }

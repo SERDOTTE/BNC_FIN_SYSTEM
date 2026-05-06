@@ -1,4 +1,4 @@
-import type { Currency, DailyFlowPoint, DashboardData, ReportsData } from "@/lib/types";
+import type { Currency, DailyFlowInflowDetail, DailyFlowPoint, DashboardData, ReportsData } from "@/lib/types";
 import {
   companyIdFromEnv,
   readCurrency,
@@ -16,6 +16,10 @@ type InstallmentRow = SupabaseRow & {
 type FlowBucket = {
   inflow: number;
   outflow: number;
+};
+
+type DailyFlowBucket = FlowBucket & {
+  inflowDetails: DailyFlowInflowDetail[];
 };
 
 function addDays(base: Date, days: number) {
@@ -53,7 +57,7 @@ async function selectWithCompany<T extends SupabaseRow>(path: string): Promise<T
 
 async function getInstallments() {
   return selectWithCompany<InstallmentRow>(
-    "receivable_installments?select=*,receivables(customer_name)&order=due_date.asc"
+    "receivable_installments?select=*,receivables(id,customer_name,sale_code,sale_number)&order=due_date.asc"
   );
 }
 
@@ -316,7 +320,7 @@ export async function buildReportsData(): Promise<ReportsData> {
 export async function buildDailyCashFlow(month: number, year: number): Promise<DailyFlowPoint[]> {
   const [transactions, installments] = await Promise.all([getTransactions(), getInstallments()]);
   const daysInMonth = new Date(year, month, 0).getDate();
-  const buckets = new Map<number, FlowBucket>();
+  const buckets = new Map<number, DailyFlowBucket>();
 
   // Inflow is projected from receivable due dates (sales schedule), regardless of payment confirmation.
   for (const row of installments) {
@@ -336,8 +340,23 @@ export async function buildDailyCashFlow(month: number, year: number): Promise<D
     }
 
     const amount = mapInstallmentAmount(row);
-    const bucket = buckets.get(rowDay) ?? { inflow: 0, outflow: 0 };
+    const currency = readCurrency(row, ["currency", "currency_contract"]);
+    const amountBrl = readNumber(row, ["projected_amount_brl_base", "amount", "amount_converted", "amount_contract"]);
+    const receivable = (row.receivables as SupabaseRow | null) ?? {};
+    const bucket = buckets.get(rowDay) ?? { inflow: 0, outflow: 0, inflowDetails: [] };
     bucket.inflow += amount;
+    bucket.inflowDetails.push({
+      installmentId: readFirstString(row, ["id"]),
+      receivableId: readFirstString(row, ["receivable_id"]),
+      customerName: readFirstString(receivable, ["customer_name"]) || "Cliente sem nome",
+      saleCode: readFirstString(receivable, ["sale_code"]) || undefined,
+      saleNumber: readNumber(receivable, ["sale_number"]) || undefined,
+      installmentNumber: readNumber(row, ["installment_number"]),
+      dueDate,
+      amount,
+      currency,
+      amountBrl
+    });
     buckets.set(rowDay, bucket);
   }
 
@@ -355,7 +374,7 @@ export async function buildDailyCashFlow(month: number, year: number): Promise<D
 
     const direction = readFirstString(row, ["direction"]);
     const amount = readNumber(row, ["amount_converted", "amount_original"]);
-    const bucket = buckets.get(rowDay) ?? { inflow: 0, outflow: 0 };
+    const bucket = buckets.get(rowDay) ?? { inflow: 0, outflow: 0, inflowDetails: [] };
     if (direction === "OUT") {
       bucket.outflow += amount;
     }
@@ -364,12 +383,13 @@ export async function buildDailyCashFlow(month: number, year: number): Promise<D
 
   return Array.from({ length: daysInMonth }, (_, index) => {
     const day = index + 1;
-    const bucket = buckets.get(day) ?? { inflow: 0, outflow: 0 };
+    const bucket = buckets.get(day) ?? { inflow: 0, outflow: 0, inflowDetails: [] };
     return {
       date: `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`,
       day,
       inflow: Number(bucket.inflow.toFixed(2)),
-      outflow: Number(bucket.outflow.toFixed(2))
+      outflow: Number(bucket.outflow.toFixed(2)),
+      inflowDetails: bucket.inflowDetails
     };
   });
 }

@@ -63,6 +63,18 @@ textarea {
   backdrop-filter: blur(14px);
 }
 
+.sidebar-auth-top {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.sidebar-welcome {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
 .brand {
   padding: 20px;
   border-radius: var(--radius-lg);
@@ -99,6 +111,14 @@ textarea {
 
 .sidebar-footer .logout-area {
   justify-items: stretch;
+}
+
+.sidebar-auth-top .logout-area {
+  justify-items: stretch;
+}
+
+.sidebar-auth-top .logout-area .btn {
+  width: 100%;
 }
 
 .nav-item {
@@ -591,6 +611,14 @@ tr:last-child td {
   fill: #1177c4;
 }
 
+.bar-inflow.clickable {
+  cursor: pointer;
+}
+
+.bar-inflow.clickable:hover {
+  fill: #0f6ab0;
+}
+
 .bar-outflow {
   fill: #cf3a3a;
 }
@@ -639,6 +667,58 @@ tr:last-child td {
   justify-content: space-between;
   gap: 10px;
   font-size: 0.86rem;
+}
+
+.flow-detail-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(7, 24, 39, 0.52);
+  backdrop-filter: blur(2px);
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+}
+
+.flow-detail-modal {
+  width: min(980px, 96vw);
+  max-height: 90vh;
+  overflow: auto;
+  border-radius: 18px;
+  border: 1px solid rgba(15, 43, 69, 0.24);
+  background: rgba(248, 253, 255, 0.98);
+  box-shadow: 0 24px 60px rgba(13, 74, 120, 0.2);
+  padding: 18px;
+  display: grid;
+  gap: 12px;
+}
+
+.flow-detail-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.flow-detail-header h3 {
+  margin: 0;
+}
+
+.flow-detail-header .subtle {
+  margin: 4px 0 0;
+}
+
+.flow-currency-summary {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.flow-detail-table-wrap {
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.7);
 }
 
 @media (max-width: 1100px) {

@@ -205,4 +205,18 @@ export type DailyFlowPoint = {
   day: number;
   inflow: number;
   outflow: number;
+  inflowDetails?: DailyFlowInflowDetail[];
+};
+
+export type DailyFlowInflowDetail = {
+  installmentId: string;
+  receivableId: string;
+  customerName: string;
+  saleCode?: string;
+  saleNumber?: number;
+  installmentNumber: number;
+  dueDate: string;
+  amount: number;
+  currency: Currency;
+  amountBrl: number;
 };

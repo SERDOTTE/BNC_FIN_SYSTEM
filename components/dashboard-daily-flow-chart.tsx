@@ -43,9 +43,33 @@ export function DashboardDailyFlowChart({ initialData, initialMonth, initialYear
   const [error, setError] = useState<string>("");
   const [barTooltip, setBarTooltip] = useState<TooltipState | null>(null);
   const [lineTooltip, setLineTooltip] = useState<TooltipState | null>(null);
+  const [selectedInflowDay, setSelectedInflowDay] = useState<DailyFlowPoint | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const monthLabel = months.find((item) => item.value === month)?.label ?? "Mês";
+
+  const summarizeOriginalByCurrency = (point: DailyFlowPoint) => {
+    const details = point.inflowDetails ?? [];
+    if (!details.length) {
+      return [["BRL", point.inflow] as const];
+    }
+
+    const totals = details.reduce<Record<string, number>>((acc, detail) => {
+      acc[detail.currency] = (acc[detail.currency] ?? 0) + detail.amount;
+      return acc;
+    }, {});
+
+    return Object.entries(totals).sort(([left], [right]) => left.localeCompare(right));
+  };
+
+  const summarizeDayInflowBrl = (point: DailyFlowPoint) => {
+    const details = point.inflowDetails ?? [];
+    if (!details.length) {
+      return point.inflow;
+    }
+
+    return details.reduce((total, detail) => total + detail.amountBrl, 0);
+  };
 
   const getTooltipPosition = (event: ReactMouseEvent<SVGElement>, tooltipWidth = 220) => {
     const svg = event.currentTarget.ownerSVGElement ?? event.currentTarget;
@@ -66,6 +90,7 @@ export function DashboardDailyFlowChart({ initialData, initialMonth, initialYear
         setError("");
         setBarTooltip(null);
         setLineTooltip(null);
+        setSelectedInflowDay(null);
       } catch {
         setError("Não foi possível carregar o fluxo diário para o período selecionado.");
       }
@@ -80,11 +105,11 @@ export function DashboardDailyFlowChart({ initialData, initialMonth, initialYear
     const plotWidth = width - padding * 2;
     const barPlotHeight = barHeight - padding * 2;
     const linePlotHeight = lineHeight - padding * 2;
-    const maxBarValue = Math.max(1, ...data.map((item) => Math.max(item.inflow, item.outflow)));
+    const maxBarValue = Math.max(1, ...data.map((item) => Math.max(summarizeDayInflowBrl(item), item.outflow)));
 
     const cumulative = data.reduce<Array<DailyFlowPoint & { balance: number }>>((acc, item) => {
       const previous = acc[acc.length - 1]?.balance ?? 0;
-      const nextBalance = previous + item.inflow - item.outflow;
+      const nextBalance = previous + summarizeDayInflowBrl(item) - item.outflow;
       acc.push({ ...item, balance: nextBalance });
       return acc;
     }, []);
@@ -105,9 +130,21 @@ export function DashboardDailyFlowChart({ initialData, initialMonth, initialYear
       .join(" ");
 
     const dayLabels = data.filter((item) => item.day === 1 || item.day % 5 === 0 || item.day === data.length);
-    const totalIn = data.reduce((total, item) => total + item.inflow, 0);
     const totalOut = data.reduce((total, item) => total + item.outflow, 0);
     const finalBalance = cumulative[cumulative.length - 1]?.balance ?? 0;
+
+    const totalInBrl = data.reduce((total, item) => total + summarizeDayInflowBrl(item), 0);
+    const totalOriginalByCurrency = data.reduce<Record<string, number>>((acc, item) => {
+      const originals = summarizeOriginalByCurrency(item);
+      for (const [currency, amount] of originals) {
+        acc[currency] = (acc[currency] ?? 0) + amount;
+      }
+      return acc;
+    }, {});
+
+    const totalOriginalEntries = Object.entries(totalOriginalByCurrency).sort(([left], [right]) =>
+      left.localeCompare(right)
+    );
 
     return {
       width,
@@ -124,11 +161,26 @@ export function DashboardDailyFlowChart({ initialData, initialMonth, initialYear
       maxBalance,
       balancePath,
       dayLabels,
-      totalIn,
+      totalInBrl,
       totalOut,
-      finalBalance
+      finalBalance,
+      totalOriginalEntries
     };
   }, [data]);
+
+  const selectedDaySummary = useMemo(() => {
+    const details = selectedInflowDay?.inflowDetails ?? [];
+    const byCurrency = details.reduce<Record<string, number>>((acc, item) => {
+      acc[item.currency] = (acc[item.currency] ?? 0) + item.amount;
+      return acc;
+    }, {});
+
+    return {
+      details,
+      currencyTotals: Object.entries(byCurrency),
+      totalBrl: details.reduce((total, item) => total + item.amountBrl, 0)
+    };
+  }, [selectedInflowDay]);
 
   return (
     <div className="daily-flow-chart">
@@ -172,7 +224,11 @@ export function DashboardDailyFlowChart({ initialData, initialMonth, initialYear
       </div>
 
       <div className="chart-meta">
-        <span className="subtle">Entradas no mês: {formatCurrency(chart.totalIn, "BRL")}</span>
+        <span className="subtle">Entradas no mês (base BRL): {formatCurrency(chart.totalInBrl, "BRL")}</span>
+        <span className="subtle">
+          Entradas no mês (moeda original):{" "}
+          {chart.totalOriginalEntries.map(([currency, amount]) => formatCurrency(amount, currency as "BRL" | "USD" | "EUR" | "ARS")).join(" · ")}
+        </span>
         <span className="subtle">Saídas no mês: {formatCurrency(chart.totalOut, "BRL")}</span>
         <span className={`subtle ${chart.finalBalance >= 0 ? "money positive" : "money negative"}`}>
           Saldo final: {formatCurrency(chart.finalBalance, "BRL")}
@@ -215,9 +271,11 @@ export function DashboardDailyFlowChart({ initialData, initialMonth, initialYear
 
           {data.map((item) => {
             const baseX = chart.padding + (item.day - 1) * chart.slotWidth;
-            const inflowHeight = (item.inflow / chart.maxBarValue) * chart.barPlotHeight;
+            const inflowBrl = summarizeDayInflowBrl(item);
+            const inflowHeight = (inflowBrl / chart.maxBarValue) * chart.barPlotHeight;
             const outflowHeight = (item.outflow / chart.maxBarValue) * chart.barPlotHeight;
-            const netValue = item.inflow - item.outflow;
+            const netValue = inflowBrl - item.outflow;
+            const inflowOriginal = summarizeOriginalByCurrency(item);
 
             return (
               <g key={item.day}>
@@ -226,8 +284,37 @@ export function DashboardDailyFlowChart({ initialData, initialMonth, initialYear
                   y={chart.padding + chart.barPlotHeight - inflowHeight}
                   width={chart.barWidth}
                   height={Math.max(1, inflowHeight)}
-                  className="bar-inflow"
+                  className={`bar-inflow ${item.inflowDetails?.length ? "clickable" : ""}`}
                   rx={3}
+                  onMouseMove={(event) => {
+                    const pos = getTooltipPosition(event);
+                    setBarTooltip({
+                      x: pos.x,
+                      y: pos.y,
+                      guideX: baseX + chart.slotWidth / 2,
+                      title: `Dia ${item.day} de ${monthLabel} / ${year}`,
+                      lines: [
+                        { label: "Entradas (base BRL)", value: formatCurrency(inflowBrl, "BRL"), tone: "positive" },
+                        {
+                          label: "Entradas (original)",
+                          value: inflowOriginal
+                            .map(([currency, amount]) => formatCurrency(amount, currency as "BRL" | "USD" | "EUR" | "ARS"))
+                            .join(" · ")
+                        },
+                        { label: "Saídas", value: formatCurrency(item.outflow, "BRL"), tone: "negative" },
+                        {
+                          label: "Clique para ver parcelas",
+                          value: item.inflowDetails?.length ? `${item.inflowDetails.length} itens` : "Sem parcelas"
+                        }
+                      ]
+                    });
+                  }}
+                  onMouseLeave={() => setBarTooltip(null)}
+                  onClick={() => {
+                    if ((item.inflowDetails?.length ?? 0) > 0) {
+                      setSelectedInflowDay(item);
+                    }
+                  }}
                 />
                 <rect
                   x={baseX + chart.slotWidth * 0.52}
@@ -251,7 +338,13 @@ export function DashboardDailyFlowChart({ initialData, initialMonth, initialYear
                       guideX: baseX + chart.slotWidth / 2,
                       title: `Dia ${item.day} de ${monthLabel} / ${year}`,
                       lines: [
-                        { label: "Entradas", value: formatCurrency(item.inflow, "BRL"), tone: "positive" },
+                        { label: "Entradas (base BRL)", value: formatCurrency(inflowBrl, "BRL"), tone: "positive" },
+                        {
+                          label: "Entradas (original)",
+                          value: inflowOriginal
+                            .map(([currency, amount]) => formatCurrency(amount, currency as "BRL" | "USD" | "EUR" | "ARS"))
+                            .join(" · ")
+                        },
                         { label: "Saídas", value: formatCurrency(item.outflow, "BRL"), tone: "negative" },
                         { label: "Saldo do dia", value: formatCurrency(netValue, "BRL"), tone: netValue >= 0 ? "positive" : "negative" }
                       ]
@@ -371,6 +464,58 @@ export function DashboardDailyFlowChart({ initialData, initialMonth, initialYear
       </div>
 
       {error ? <p className="subtle">{error}</p> : null}
+
+      {selectedInflowDay ? (
+        <div className="flow-detail-overlay" role="dialog" aria-modal="true" aria-label="Detalhes das entradas do dia">
+          <div className="flow-detail-modal">
+            <div className="flow-detail-header">
+              <div>
+                <h3>Entradas do dia {selectedInflowDay.day}</h3>
+                <p className="subtle">{monthLabel} / {year} · {selectedDaySummary.details.length} parcelas</p>
+              </div>
+              <button className="btn secondary small" type="button" onClick={() => setSelectedInflowDay(null)}>
+                Fechar
+              </button>
+            </div>
+
+            <div className="flow-currency-summary">
+              {selectedDaySummary.currencyTotals.map(([currency, amount]) => (
+                <span key={currency} className="chip warning">
+                  {currency}: {formatCurrency(amount, currency as "BRL" | "USD" | "EUR" | "ARS")}
+                </span>
+              ))}
+              <span className="chip positive">Base BRL: {formatCurrency(selectedDaySummary.totalBrl, "BRL")}</span>
+            </div>
+
+            <div className="flow-detail-table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Venda</th>
+                    <th>Cliente</th>
+                    <th>Parcela</th>
+                    <th>Moeda</th>
+                    <th>Valor</th>
+                    <th>Base BRL</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {selectedDaySummary.details.map((detail) => (
+                    <tr key={detail.installmentId}>
+                      <td>{detail.saleCode || (detail.saleNumber ? `Venda #${detail.saleNumber}` : "Sem código")}</td>
+                      <td>{detail.customerName}</td>
+                      <td>{detail.installmentNumber}</td>
+                      <td>{detail.currency}</td>
+                      <td>{formatCurrency(detail.amount, detail.currency)}</td>
+                      <td>{formatCurrency(detail.amountBrl, "BRL")}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

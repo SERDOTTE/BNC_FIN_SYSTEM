@@ -138,7 +138,8 @@ export async function getDailyCashFlowByMonth(month: number, year: number): Prom
     date: `${year}-${String(month).padStart(2, "0")}-${String(index + 1).padStart(2, "0")}`,
     day: index + 1,
     inflow: 0,
-    outflow: 0
+    outflow: 0,
+    inflowDetails: []
   });
 }
 
