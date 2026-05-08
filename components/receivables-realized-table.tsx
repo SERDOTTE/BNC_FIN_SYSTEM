@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useTransition } from "react";
 
-import { deleteReceivable, updateReceivableStatus } from "../lib/api-client";
+import { deleteReceivable, updateInstallmentStatus } from "../lib/api-client";
 import { ReceivableEditModal } from "@/components/receivable-edit-modal";
 import { formatCurrency, formatDate } from "@/lib/formatters";
 import type { Installment, Receivable } from "@/lib/types";
@@ -74,16 +74,21 @@ function installmentStatusMeta(installment: Installment) {
   return { label: "A receber", className: "tooltip-status-pending" };
 }
 
-const flowStatusCycle: Array<"OPEN" | "OVERDUE" | "PAID"> = ["OPEN", "OVERDUE", "PAID"];
+const flowStatusCycle: Array<"PENDING" | "OVERDUE" | "PAID"> = ["PENDING", "OVERDUE", "PAID"];
 
 export function ReceivablesRealizedTable({ receivables, installments }: ReceivablesRealizedTableProps) {
   const [receivablesState, setReceivablesState] = useState<Receivable[]>(receivables);
+  const [installmentsState, setInstallmentsState] = useState<Installment[]>(installments);
   const [isPending, startTransition] = useTransition();
   const [activeTab, setActiveTab] = useState<ReceivablesViewTab>("sales");
 
   useEffect(() => {
     setReceivablesState(receivables);
   }, [receivables]);
+
+  useEffect(() => {
+    setInstallmentsState(installments);
+  }, [installments]);
 
   const monthOptions = useMemo<MonthOption[]>(() => {
     const keys = Array.from(new Set(receivablesState.map((item) => getMonthKey(item.saleDate))));
@@ -95,11 +100,11 @@ export function ReceivablesRealizedTable({ receivables, installments }: Receivab
   const [selectedMonth, setSelectedMonth] = useState<string>(monthOptions[0]?.value ?? "");
 
   const receiptMonthOptions = useMemo<MonthOption[]>(() => {
-    const keys = Array.from(new Set(installments.map((item) => getMonthKey(item.dueDate))));
+    const keys = Array.from(new Set(installmentsState.map((item) => getMonthKey(item.dueDate))));
     return keys
       .sort((left, right) => (left < right ? 1 : -1))
       .map((value) => ({ value, label: formatMonthLabel(value) }));
-  }, [installments]);
+  }, [installmentsState]);
 
   const [selectedReceiptMonth, setSelectedReceiptMonth] = useState<string>(receiptMonthOptions[0]?.value ?? "");
 
@@ -136,7 +141,7 @@ export function ReceivablesRealizedTable({ receivables, installments }: Receivab
   const installmentsByReceivable = useMemo(() => {
     const grouped = new Map<string, Installment[]>();
 
-    for (const installment of installments) {
+    for (const installment of installmentsState) {
       const list = grouped.get(installment.receivableId) ?? [];
       list.push(installment);
       grouped.set(installment.receivableId, list);
@@ -147,7 +152,7 @@ export function ReceivablesRealizedTable({ receivables, installments }: Receivab
     }
 
     return grouped;
-  }, [installments]);
+  }, [installmentsState]);
 
   const filteredReceivables = useMemo(() => {
     if (!selectedMonth) {
@@ -158,7 +163,7 @@ export function ReceivablesRealizedTable({ receivables, installments }: Receivab
   }, [receivablesState, selectedMonth]);
 
   const filteredInstallmentsByReceiptMonth = useMemo(() => {
-    return installments
+    return installmentsState
       .filter((installment) => {
         if (!selectedReceiptMonth) {
           return true;
@@ -173,15 +178,7 @@ export function ReceivablesRealizedTable({ receivables, installments }: Receivab
 
         return left.dueDate.localeCompare(right.dueDate);
       });
-  }, [installments, selectedReceiptMonth]);
-
-  const receivableStatusById = useMemo(() => {
-    const map = new Map<string, Receivable["status"]>();
-    for (const receivable of receivablesState) {
-      map.set(receivable.id, receivable.status);
-    }
-    return map;
-  }, [receivablesState]);
+  }, [installmentsState, selectedReceiptMonth]);
 
   const receiptMonthSummary = useMemo(() => {
     const totalInstallments = filteredInstallmentsByReceiptMonth.length;
@@ -196,28 +193,27 @@ export function ReceivablesRealizedTable({ receivables, installments }: Receivab
     };
   }, [filteredInstallmentsByReceiptMonth]);
 
-  function getStatusLabel(status: Receivable["status"]) {
+  function getStatusLabel(status: Installment["status"]) {
     if (status === "PAID") return "Recebido";
     if (status === "OVERDUE") return "Atraso";
-    if (status === "OPEN" || status === "PARTIALLY_PAID") return "Receber";
+    if (status === "PENDING") return "Receber";
     return status;
   }
 
-  function nextFlowStatus(status: Receivable["status"]): "OPEN" | "OVERDUE" | "PAID" {
-    const current = status === "PARTIALLY_PAID" ? "OPEN" : status;
-    const currentIndex = flowStatusCycle.indexOf((current as "OPEN" | "OVERDUE" | "PAID") ?? "OPEN");
+  function nextFlowStatus(status: "PENDING" | "OVERDUE" | "PAID"): "PENDING" | "OVERDUE" | "PAID" {
+    const currentIndex = flowStatusCycle.indexOf(status);
     const safeIndex = currentIndex >= 0 ? currentIndex : 0;
     return flowStatusCycle[(safeIndex + 1) % flowStatusCycle.length];
   }
 
-  function handleCycleFlowStatus(receivableId: string, currentStatus: Receivable["status"]) {
+  function handleCycleFlowStatus(installmentId: string, currentStatus: "PENDING" | "OVERDUE" | "PAID") {
     const targetStatus = nextFlowStatus(currentStatus);
 
     startTransition(async () => {
       try {
-        const updated = await updateReceivableStatus(receivableId, targetStatus);
-        setReceivablesState((current) =>
-          current.map((item) => (item.id === receivableId ? { ...item, status: updated.status } : item))
+        const updated = await updateInstallmentStatus(installmentId, targetStatus);
+        setInstallmentsState((current) =>
+          current.map((item) => (item.id === installmentId ? { ...item, status: updated.status } : item))
         );
       } catch {
         // Keep existing UI state on failed update.
@@ -449,7 +445,10 @@ export function ReceivablesRealizedTable({ receivables, installments }: Receivab
                 <tbody>
                   {filteredInstallmentsByReceiptMonth.length ? (
                     filteredInstallmentsByReceiptMonth.map((installment) => {
-                      const receivableStatus = receivableStatusById.get(installment.receivableId) ?? "OPEN";
+                      const currentStatus =
+                        installment.status === "PENDING" && isOverdueInstallment(installment)
+                          ? "OVERDUE"
+                          : installment.status;
 
                       return (
                         <tr key={installment.id}>
@@ -459,12 +458,12 @@ export function ReceivablesRealizedTable({ receivables, installments }: Receivab
                           <td>{formatCurrency(installment.projectedAmountBrlBase, "BRL")}</td>
                           <td>
                             <button
-                              className={`chip ${receivableStatus === "PAID" ? "positive" : receivableStatus === "OVERDUE" ? "danger" : "warning"}`}
+                              className={`chip ${currentStatus === "PAID" ? "positive" : currentStatus === "OVERDUE" ? "danger" : "warning"}`}
                               type="button"
-                              disabled={isPending}
-                              onClick={() => handleCycleFlowStatus(installment.receivableId, receivableStatus)}
+                              disabled={isPending || installment.status === "CANCELED"}
+                              onClick={() => handleCycleFlowStatus(installment.id, currentStatus)}
                             >
-                              {getStatusLabel(receivableStatus)}
+                              {getStatusLabel(currentStatus)}
                             </button>
                           </td>
                         </tr>

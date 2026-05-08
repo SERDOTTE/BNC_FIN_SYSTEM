@@ -25,11 +25,11 @@ export function InstallmentsTable({ initialInstallments, defaultAccountId }: Ins
   }
 
   function resolveQueueStatus(installment: Installment): "PAID" | "OVERDUE" | "RECEBER" {
-    if (installment.status === "PAID" || installment.receivableStatus === "PAID") {
+    if (installment.status === "PAID") {
       return "PAID";
     }
 
-    if (installment.status === "OVERDUE" || installment.receivableStatus === "OVERDUE" || isPastDue(installment.dueDate)) {
+    if (installment.status === "OVERDUE" || isPastDue(installment.dueDate)) {
       return "OVERDUE";
     }
 

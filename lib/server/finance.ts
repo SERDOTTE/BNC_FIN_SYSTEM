@@ -117,6 +117,7 @@ export async function buildDashboardData(): Promise<DashboardData> {
 
   for (const row of installments) {
     const dueDate = toIsoDate(row.due_date);
+    const paymentDate = toIsoDate(row.payment_date);
     const status = readFirstString(row, ["status"]);
     const amount = mapInstallmentAmount(row);
     const currency = readCurrency(row, ["currency"]);
@@ -131,11 +132,14 @@ export async function buildDashboardData(): Promise<DashboardData> {
     const isPaid = status === "PAID";
     const isCanceled = status === "CANCELED";
     const isLate = status === "OVERDUE" || ((status === "PENDING" || status === "OPEN" || status === "PARTIALLY_PAID") && dueDate && dueDate < todayIso);
+    const paidInCurrentMonth = isPaid && paymentDate && monthKey(paymentDate) === currentMonth;
 
-    if (inCurrentMonth && !isCanceled) {
-      if (isPaid) {
-        monthReceived += amount;
-      } else if (isLate) {
+    if (paidInCurrentMonth) {
+      monthReceived += amount;
+    }
+
+    if (inCurrentMonth && !isCanceled && !isPaid) {
+      if (isLate) {
         monthOverdue += amount;
       } else {
         monthToReceive += amount;

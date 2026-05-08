@@ -216,6 +216,17 @@ export async function payInstallment(installmentId: string, payload: PayInstallm
   );
 }
 
+export async function updateInstallmentStatus(
+  installmentId: string,
+  status: "PENDING" | "OVERDUE" | "PAID"
+): Promise<{ id: string; status: Installment["status"] }> {
+  return sendRouteJson<{ id: string; status: Installment["status"] }, { status: string }>(
+    `/api/installments/${installmentId}/status`,
+    "PATCH",
+    { status }
+  );
+}
+
 export async function payPayable(payableId: string, payload: PayPayableRequest): Promise<PaymentResult> {
   return sendRouteJson<PaymentResult, PayPayableRequest>(
     `/api/payables/${payableId}/pay`,
