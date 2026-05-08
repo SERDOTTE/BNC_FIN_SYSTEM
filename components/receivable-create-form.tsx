@@ -41,6 +41,30 @@ function emptyInstallmentInput(): InstallmentInput {
   };
 }
 
+function addMonthsKeepingDay(isoDate: string, monthsToAdd: number) {
+  if (!isoDate) {
+    return "";
+  }
+
+  const [yearText, monthText, dayText] = isoDate.split("-");
+  const year = Number.parseInt(yearText, 10);
+  const month = Number.parseInt(monthText, 10);
+  const day = Number.parseInt(dayText, 10);
+
+  if (!year || !month || !day) {
+    return "";
+  }
+
+  const baseMonthIndex = month - 1;
+  const targetMonthIndex = baseMonthIndex + monthsToAdd;
+  const targetYear = year + Math.floor(targetMonthIndex / 12);
+  const normalizedMonthIndex = ((targetMonthIndex % 12) + 12) % 12;
+  const daysInTargetMonth = new Date(targetYear, normalizedMonthIndex + 1, 0).getDate();
+  const targetDay = Math.min(day, daysInTargetMonth);
+
+  return `${targetYear}-${String(normalizedMonthIndex + 1).padStart(2, "0")}-${String(targetDay).padStart(2, "0")}`;
+}
+
 export function ReceivableCreateForm({ onCreated }: ReceivableCreateFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -85,6 +109,69 @@ const [meiosPagamento, setMeiosPagamento] = useState<MeioPagamento[]>([]);
       Array.from({ length: installmentsCount }, (_, i) => cur[i] ?? emptyInstallmentInput())
     );
   }, [installmentsCount]);
+
+  // For multiple installments, replicate payment/account data from installment 1
+  // and auto-generate due dates month-by-month keeping the same day.
+  useEffect(() => {
+    if (installmentsCount <= 1) {
+      return;
+    }
+
+    setInstallmentInputs((cur) => {
+      if (!cur.length) {
+        return cur;
+      }
+
+      const first = cur[0];
+      let changed = false;
+
+      const next = cur.map((item, index) => {
+        if (index === 0) {
+          return item;
+        }
+
+        const nextDueDate = addMonthsKeepingDay(first.dueDate, index);
+        const nextItem: InstallmentInput = {
+          ...item,
+          dueDate: nextDueDate,
+          meioPagamentoId: first.meioPagamentoId,
+          meioPagamentoNome: first.meioPagamentoNome,
+          meioPagamentoTipo: first.meioPagamentoTipo,
+          accountId: first.accountId,
+          accountName: first.accountName,
+          cashReceiverId: first.cashReceiverId,
+          cashReceiverName: first.cashReceiverName,
+        };
+
+        if (
+          nextItem.dueDate !== item.dueDate ||
+          nextItem.meioPagamentoId !== item.meioPagamentoId ||
+          nextItem.meioPagamentoNome !== item.meioPagamentoNome ||
+          nextItem.meioPagamentoTipo !== item.meioPagamentoTipo ||
+          nextItem.accountId !== item.accountId ||
+          nextItem.accountName !== item.accountName ||
+          nextItem.cashReceiverId !== item.cashReceiverId ||
+          nextItem.cashReceiverName !== item.cashReceiverName
+        ) {
+          changed = true;
+        }
+
+        return nextItem;
+      });
+
+      return changed ? next : cur;
+    });
+  }, [
+    installmentsCount,
+    installmentInputs[0]?.dueDate,
+    installmentInputs[0]?.meioPagamentoId,
+    installmentInputs[0]?.meioPagamentoNome,
+    installmentInputs[0]?.meioPagamentoTipo,
+    installmentInputs[0]?.accountId,
+    installmentInputs[0]?.accountName,
+    installmentInputs[0]?.cashReceiverId,
+    installmentInputs[0]?.cashReceiverName,
+  ]);
 
   // Sincroniza moeda dos itens quando a moeda da venda mudar
   useEffect(() => {

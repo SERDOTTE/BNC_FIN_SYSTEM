@@ -12,6 +12,12 @@ function companyIdFromEnv() {
   return process.env.SUPABASE_COMPANY_ID ?? "";
 }
 
+function readNonEmptyString(value: unknown) {
+  if (typeof value !== "string") return "";
+  const trimmed = value.trim();
+  return trimmed;
+}
+
 function projectAmountBrlBase(amount: number, currency: string, fxRateUsdBrl?: number) {
   if (currency === "BRL") return amount;
   if (currency === "USD" && typeof fxRateUsdBrl === "number" && fxRateUsdBrl > 0) {
@@ -150,7 +156,10 @@ export async function PATCH(request: NextRequest, { params }: Params) {
 
     // Rebuild installments if requested
     if (body.installmentInputs && body.installmentInputs.length > 0) {
-      const companyId = companyIdFromEnv();
+      const companyId = companyIdFromEnv() || readNonEmptyString(row.company_id);
+      if (!companyId) {
+        throw new Error("Não foi possível identificar company_id da venda para recriar parcelas.");
+      }
       const count = body.installmentInputs.length;
       const totalAmount = body.totalAmount ?? Number(row.total_amount ?? 0);
       const currency = body.currency ?? String(row.currency ?? "BRL");

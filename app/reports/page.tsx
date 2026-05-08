@@ -1,5 +1,6 @@
 import { PageHeader } from "@/components/page-header";
 import { SectionCard } from "@/components/section-card";
+import { SalesReconciliationReport } from "@/components/sales-reconciliation-report";
 import { formatCurrency } from "@/lib/formatters";
 import { buildReportsData } from "@/lib/server/loaders";
 
@@ -9,6 +10,10 @@ export default async function ReportsPage() {
   return (
     <div className="page">
       <PageHeader title="Relatórios" description="Leitura do fluxo realizado, projeção por cenário e exposição líquida em USD." />
+
+      <SectionCard title="Conciliação de Vendas" description="Selecione o mês e gere o relatório em PDF com as vendas realizadas e respectivas parcelas.">
+        <SalesReconciliationReport />
+      </SectionCard>
 
       <section className="stats-grid">
         {report.scenarioCards.map((scenario) => (
