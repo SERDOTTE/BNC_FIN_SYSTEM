@@ -159,6 +159,17 @@ export async function markReceivableAsReceived(receivableId: string): Promise<Re
   );
 }
 
+export async function updateReceivableStatus(
+  receivableId: string,
+  status: "OPEN" | "OVERDUE" | "PAID"
+): Promise<Receivable> {
+  return sendRouteJson<Receivable, { status: string }>(
+    `/api/receivables/${receivableId}/status`,
+    "PATCH",
+    { status }
+  );
+}
+
 export async function updateReceivable(
   receivableId: string,
   payload: {

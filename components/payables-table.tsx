@@ -35,7 +35,7 @@ export function PayablesTable({ initialPayables, defaultAccountId }: PayablesTab
               : item
           )
         );
-        setFeedback(`Conta ${payable.supplierName} liquidada com sucesso.`);
+        setFeedback(`Conta ${payable.supplierName} liquidado com sucesso.`);
       } catch (error) {
         setFeedback(error instanceof Error ? error.message : "Falha ao liquidar conta a pagar.");
       }
@@ -74,7 +74,7 @@ export function PayablesTable({ initialPayables, defaultAccountId }: PayablesTab
                   disabled={isPending || payable.status === "PAID" || payable.status === "CANCELED"}
                   onClick={() => handlePay(payable)}
                 >
-                  {payable.status === "PAID" ? "Liquidada" : "Liquidar"}
+                  {payable.status === "PAID" ? "Liquidado" : "Liquidar"}
                 </button>
               </td>
             </tr>

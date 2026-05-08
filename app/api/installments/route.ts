@@ -16,13 +16,14 @@ export async function GET() {
 
   try {
     const rows = await supabaseSelect<InstallmentRow>(
-      `receivable_installments?select=*,receivables(customer_name)&order=due_date.asc${companyFilter}`
+      `receivable_installments?select=*,receivables(customer_name,status)&order=due_date.asc${companyFilter}`
     );
 
     return NextResponse.json(
       rows.map((row) => ({
         id: readFirstString(row, ["id"]),
         receivableId: readFirstString(row, ["receivable_id"]),
+        receivableStatus: readFirstString((row.receivables as SupabaseRow | null) ?? {}, ["status"]) || "OPEN",
         title: `Parcela ${readNumber(row, ["installment_number"])}`,
         customerName: readFirstString((row.receivables as SupabaseRow | null) ?? {}, ["customer_name"]),
         installmentNumber: readNumber(row, ["installment_number"]),

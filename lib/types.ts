@@ -36,6 +36,7 @@ export type Receivable = {
 export type Installment = {
   id: string;
   receivableId: string;
+  receivableStatus?: Receivable["status"];
   installmentCode?: string;
   title: string;
   customerName: string;
@@ -90,6 +91,9 @@ export type DashboardData = {
   futureOutflow: number;
   projectedNet: number;
   projectedClosingBalance: number;
+  monthReceived: number;
+  monthToReceive: number;
+  monthOverdue: number;
   overdueInstallments: number;
   currentUsdRate: number;
   netUsdExposure: number;

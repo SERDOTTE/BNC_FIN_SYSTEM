@@ -77,11 +77,11 @@ async function getLatestUsdRate() {
 }
 
 function mapInstallmentAmount(row: InstallmentRow) {
-  return readNumber(row, ["amount", "projected_amount_brl_base"]);
+  return readNumber(row, ["projected_amount_brl_base", "amount", "amount_converted", "amount_contract"]);
 }
 
 function mapPayableAmount(row: SupabaseRow) {
-  return readNumber(row, ["amount", "projected_amount_brl_base"]);
+  return readNumber(row, ["projected_amount_brl_base", "amount", "amount_converted", "amount_contract"]);
 }
 
 export async function buildDashboardData(): Promise<DashboardData> {
@@ -95,6 +95,7 @@ export async function buildDashboardData(): Promise<DashboardData> {
   const today = new Date();
   const todayIso = formatDate(today);
   const horizonIso = formatDate(addDays(today, 30));
+  const currentMonth = monthKey(todayIso);
 
   let currentCash = 0;
   for (const row of transactions) {
@@ -105,6 +106,9 @@ export async function buildDashboardData(): Promise<DashboardData> {
 
   let futureInflow = 0;
   let futureOutflow = 0;
+  let monthReceived = 0;
+  let monthToReceive = 0;
+  let monthOverdue = 0;
   let overdueInstallments = 0;
   let netUsdExposure = 0;
 
@@ -121,6 +125,21 @@ export async function buildDashboardData(): Promise<DashboardData> {
 
     if (status === "OVERDUE" || (status === "PENDING" && dueDate && dueDate < todayIso)) {
       overdueInstallments += 1;
+    }
+
+    const inCurrentMonth = dueDate && monthKey(dueDate) === currentMonth;
+    const isPaid = status === "PAID";
+    const isCanceled = status === "CANCELED";
+    const isLate = status === "OVERDUE" || ((status === "PENDING" || status === "OPEN" || status === "PARTIALLY_PAID") && dueDate && dueDate < todayIso);
+
+    if (inCurrentMonth && !isCanceled) {
+      if (isPaid) {
+        monthReceived += amount;
+      } else if (isLate) {
+        monthOverdue += amount;
+      } else {
+        monthToReceive += amount;
+      }
     }
 
     if (countsAsScheduledInflow && dueDate && isSameOrAfter(dueDate, todayIso) && isSameOrBefore(dueDate, horizonIso)) {
@@ -227,6 +246,9 @@ export async function buildDashboardData(): Promise<DashboardData> {
     futureOutflow: Number(futureOutflow.toFixed(2)),
     projectedNet: Number(projectedNet.toFixed(2)),
     projectedClosingBalance: Number(projectedClosingBalance.toFixed(2)),
+    monthReceived: Number(monthReceived.toFixed(2)),
+    monthToReceive: Number(monthToReceive.toFixed(2)),
+    monthOverdue: Number(monthOverdue.toFixed(2)),
     overdueInstallments,
     currentUsdRate: Number(baseRate.toFixed(2)),
     netUsdExposure: Number(netUsdExposure.toFixed(2)),

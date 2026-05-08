@@ -114,13 +114,45 @@ function buildSaleCode(saleNumber: number) {
   return String(saleNumber).padStart(3, "0");
 }
 
+function parseSaleNumberFromUnknown(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+    return Math.trunc(value);
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return 0;
+
+    const numeric = Number(trimmed);
+    if (Number.isFinite(numeric) && numeric > 0) {
+      return Math.trunc(numeric);
+    }
+
+    const match = trimmed.match(/(\d+)/g);
+    if (match && match.length > 0) {
+      const lastChunk = match[match.length - 1];
+      const parsed = Number(lastChunk);
+      if (Number.isFinite(parsed) && parsed > 0) {
+        return Math.trunc(parsed);
+      }
+    }
+  }
+
+  return 0;
+}
+
 async function generateNextSaleSequence(companyId: string) {
   const rows = await supabaseSelect<SupabaseRow>(
-    `receivables?select=sale_number&company_id=eq.${encodeURIComponent(companyId)}&order=sale_number.desc.nullslast&limit=1`
+    `receivables?select=sale_number,sale_code&company_id=eq.${encodeURIComponent(companyId)}&order=created_at.desc&limit=500`
   );
 
-  const current = rows.length > 0 ? Number(rows[0].sale_number ?? 0) : 0;
-  const nextSaleNumber = Number.isFinite(current) ? current + 1 : 1;
+  const highest = rows.reduce((max, row) => {
+    const fromNumber = parseSaleNumberFromUnknown(row.sale_number);
+    const fromCode = parseSaleNumberFromUnknown(row.sale_code);
+    return Math.max(max, fromNumber, fromCode);
+  }, 0);
+
+  const nextSaleNumber = highest + 1;
 
   return {
     saleNumber: nextSaleNumber,

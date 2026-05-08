@@ -16,16 +16,34 @@ export function InstallmentsTable({ initialInstallments, defaultAccountId }: Ins
   const [feedback, setFeedback] = useState<string>("");
   const [isPending, startTransition] = useTransition();
 
-  function getStatusMeta(status: Installment["status"]) {
+  function isPastDue(dueDateIso: string) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const dueDate = new Date(`${dueDateIso}T00:00:00`);
+    return dueDate.getTime() < today.getTime();
+  }
+
+  function resolveQueueStatus(installment: Installment): "PAID" | "OVERDUE" | "RECEBER" {
+    if (installment.status === "PAID" || installment.receivableStatus === "PAID") {
+      return "PAID";
+    }
+
+    if (installment.status === "OVERDUE" || installment.receivableStatus === "OVERDUE" || isPastDue(installment.dueDate)) {
+      return "OVERDUE";
+    }
+
+    return "RECEBER";
+  }
+
+  function getStatusMeta(status: "PAID" | "OVERDUE" | "RECEBER") {
     switch (status) {
       case "PAID":
-        return { label: "PAGO", tone: "positive" };
+        return { label: "RECEBIDO", tone: "positive" };
       case "OVERDUE":
-        return { label: "ATRASADA", tone: "danger" };
-      case "PENDING":
-        return { label: "PENDENTE", tone: "warning" };
-      case "CANCELED":
-        return { label: "CANCELADA", tone: "danger" };
+        return { label: "ATRASO", tone: "danger" };
+      case "RECEBER":
+        return { label: "RECEBER", tone: "warning" };
       default:
         return { label: status, tone: "warning" };
     }
@@ -50,7 +68,7 @@ export function InstallmentsTable({ initialInstallments, defaultAccountId }: Ins
               : item
           )
         );
-        setFeedback(`Parcela ${installment.title} liquidada com sucesso.`);
+        setFeedback(`Parcela ${installment.title} liquidado com sucesso.`);
       } catch (error) {
         setFeedback(error instanceof Error ? error.message : "Falha ao liquidar parcela.");
       }
@@ -72,7 +90,8 @@ export function InstallmentsTable({ initialInstallments, defaultAccountId }: Ins
         </thead>
         <tbody>
           {installments.map((installment) => {
-            const statusMeta = getStatusMeta(installment.status);
+            const queueStatus = resolveQueueStatus(installment);
+            const statusMeta = getStatusMeta(queueStatus);
 
             return <tr key={installment.id}>
               <td>
@@ -97,7 +116,7 @@ export function InstallmentsTable({ initialInstallments, defaultAccountId }: Ins
                   disabled={isPending || installment.status === "PAID" || installment.status === "CANCELED"}
                   onClick={() => handlePay(installment)}
                 >
-                  {installment.status === "PAID" ? "Liquidada" : "Liquidar"}
+                  {installment.status === "PAID" ? "Recebido" : "Receber"}
                 </button>
               </td>
             </tr>;

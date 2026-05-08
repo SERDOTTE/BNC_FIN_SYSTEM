@@ -9,6 +9,8 @@ export default async function HomePage() {
   const now = new Date();
   const month = now.getMonth() + 1;
   const year = now.getFullYear();
+  const currentMonthLabel = new Intl.DateTimeFormat("pt-BR", { month: "long" }).format(now);
+  const currentMonthTitle = currentMonthLabel.charAt(0).toUpperCase() + currentMonthLabel.slice(1);
 
   const [dashboard, dailyFlow] = await Promise.all([
     buildDashboardData(),
@@ -29,20 +31,20 @@ export default async function HomePage() {
           </div>
         </div>
         <div className="summary-card">
-          <span className="subtle">Saldo de fechamento previsto em 30 dias</span>
-          <strong>{formatCurrency(dashboard.projectedClosingBalance, "BRL")}</strong>
+          <span className="subtle">Recebimento do mês · {currentMonthTitle}</span>
+          <strong>{formatCurrency(dashboard.monthReceived + dashboard.monthToReceive + dashboard.monthOverdue, "BRL")}</strong>
           <div className="kpi-list">
             <div className="kpi-row">
-              <span className="subtle">Recebimentos a vencer</span>
-              <span>{formatCurrency(dashboard.futureInflow, "BRL")}</span>
+              <span className="subtle">Recebido no mês</span>
+              <span>{formatCurrency(dashboard.monthReceived, "BRL")}</span>
             </div>
             <div className="kpi-row">
-              <span className="subtle">Pagamentos a vencer</span>
-              <span>{formatCurrency(dashboard.futureOutflow, "BRL")}</span>
+              <span className="subtle">Receber no mês</span>
+              <span>{formatCurrency(dashboard.monthToReceive, "BRL")}</span>
             </div>
             <div className="kpi-row">
-              <span className="subtle">Exposição cambial líquida</span>
-              <span>{formatCurrency(dashboard.netUsdExposure, "USD")}</span>
+              <span className="subtle">Atraso no mês</span>
+              <span>{formatCurrency(dashboard.monthOverdue, "BRL")}</span>
             </div>
           </div>
         </div>

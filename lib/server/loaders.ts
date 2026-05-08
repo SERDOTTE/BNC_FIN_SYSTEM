@@ -82,12 +82,13 @@ export async function listReceivablesServer(): Promise<Receivable[]> {
 
 export async function listInstallmentsServer(): Promise<Installment[]> {
   const rows = await supabaseSelect<InstallmentRow>(
-    withCompanyFilter("receivable_installments?select=*,receivables(customer_name)&order=due_date.asc")
+    withCompanyFilter("receivable_installments?select=*,receivables(customer_name,status)&order=due_date.asc")
   );
 
   return rows.map((row) => ({
     id: readFirstString(row, ["id"]),
     receivableId: readFirstString(row, ["receivable_id"]),
+    receivableStatus: (readFirstString((row.receivables as SupabaseRow | null) ?? {}, ["status"]) || "OPEN") as Installment["receivableStatus"],
     installmentCode: readFirstString(row, ["installment_code"]) || undefined,
     title: `Parcela ${readNumber(row, ["installment_number"])}`,
     customerName: readFirstString((row.receivables as SupabaseRow | null) ?? {}, ["customer_name"]),
