@@ -75,6 +75,7 @@ function installmentStatusMeta(installment: Installment) {
 }
 
 const flowStatusCycle: Array<"PENDING" | "OVERDUE" | "PAID"> = ["PENDING", "OVERDUE", "PAID"];
+type FlowInstallmentStatus = "PENDING" | "OVERDUE" | "PAID";
 
 export function ReceivablesRealizedTable({ receivables, installments }: ReceivablesRealizedTableProps) {
   const [receivablesState, setReceivablesState] = useState<Receivable[]>(receivables);
@@ -193,20 +194,20 @@ export function ReceivablesRealizedTable({ receivables, installments }: Receivab
     };
   }, [filteredInstallmentsByReceiptMonth]);
 
-  function getStatusLabel(status: Installment["status"]) {
+  function getStatusLabel(status: FlowInstallmentStatus) {
     if (status === "PAID") return "Recebido";
     if (status === "OVERDUE") return "Atraso";
     if (status === "PENDING") return "Receber";
     return status;
   }
 
-  function nextFlowStatus(status: "PENDING" | "OVERDUE" | "PAID"): "PENDING" | "OVERDUE" | "PAID" {
+  function nextFlowStatus(status: FlowInstallmentStatus): FlowInstallmentStatus {
     const currentIndex = flowStatusCycle.indexOf(status);
     const safeIndex = currentIndex >= 0 ? currentIndex : 0;
     return flowStatusCycle[(safeIndex + 1) % flowStatusCycle.length];
   }
 
-  function handleCycleFlowStatus(installmentId: string, currentStatus: "PENDING" | "OVERDUE" | "PAID") {
+  function handleCycleFlowStatus(installmentId: string, currentStatus: FlowInstallmentStatus) {
     const targetStatus = nextFlowStatus(currentStatus);
 
     startTransition(async () => {
@@ -445,10 +446,12 @@ export function ReceivablesRealizedTable({ receivables, installments }: Receivab
                 <tbody>
                   {filteredInstallmentsByReceiptMonth.length ? (
                     filteredInstallmentsByReceiptMonth.map((installment) => {
-                      const currentStatus =
-                        installment.status === "PENDING" && isOverdueInstallment(installment)
-                          ? "OVERDUE"
-                          : installment.status;
+                      const currentStatus: FlowInstallmentStatus =
+                        installment.status === "PAID"
+                          ? "PAID"
+                          : installment.status === "OVERDUE" || isOverdueInstallment(installment)
+                            ? "OVERDUE"
+                            : "PENDING";
 
                       return (
                         <tr key={installment.id}>
