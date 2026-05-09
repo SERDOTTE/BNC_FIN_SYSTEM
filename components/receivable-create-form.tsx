@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 import { createReceivable, listAccounts, listEmployees, listFornecedores, listMeiosPagamento, listPasseios } from "../lib/api-client";
+import { FornecedorCreateModal } from "@/components/fornecedor-create-modal";
 import { SaleItemRow } from "@/components/sale-item-row";
 import type { Account, Currency, InstallmentInput, LookupOption, Receivable, SaleItem } from "@/lib/types";
 
@@ -78,6 +79,9 @@ const [meiosPagamento, setMeiosPagamento] = useState<MeioPagamento[]>([]);
   const [loadingOptions, setLoadingOptions] = useState(true);
   const [items, setItems] = useState<SaleItem[]>([emptyItem("USD")]);
   const [isOpen, setIsOpen] = useState(false);
+  const [isFornecedorModalOpen, setIsFornecedorModalOpen] = useState(false);
+  const [fornecedorTargetIndex, setFornecedorTargetIndex] = useState<number | null>(null);
+  const [activeFornecedorIndex, setActiveFornecedorIndex] = useState(0);
   const [installmentsCount, setInstallmentsCount] = useState(1);
 
   // Estado global de pagamento (usado apenas quando installmentsCount === 1)
@@ -195,10 +199,50 @@ const [meiosPagamento, setMeiosPagamento] = useState<MeioPagamento[]>([]);
 
   function handleItemRemove(index: number) {
     setItems((cur) => cur.filter((_, i) => i !== index));
+    setActiveFornecedorIndex((current) => {
+      if (current === index) {
+        return Math.max(0, current - 1);
+      }
+      if (current > index) {
+        return current - 1;
+      }
+      return current;
+    });
   }
 
   function addItem() {
     setItems((cur) => [...cur, emptyItem(currency)]);
+  }
+
+  function openFornecedorModal() {
+    const targetIndex = Math.max(0, Math.min(activeFornecedorIndex, items.length - 1));
+    setFornecedorTargetIndex(targetIndex);
+    setIsFornecedorModalOpen(true);
+  }
+
+  function handleFornecedorCreated(created: LookupOption) {
+    setFornecedores((current) => {
+      const next = [...current.filter((item) => item.id !== created.id), created];
+      return next.sort((left, right) => left.name.localeCompare(right.name));
+    });
+
+    if (fornecedorTargetIndex !== null) {
+      setItems((current) =>
+        current.map((item, index) =>
+          index === fornecedorTargetIndex
+            ? { ...item, fornecedorId: created.id, fornecedorNome: created.name }
+            : item
+        )
+      );
+    }
+
+    setIsFornecedorModalOpen(false);
+    setFornecedorTargetIndex(null);
+  }
+
+  function closeFornecedorModal() {
+    setIsFornecedorModalOpen(false);
+    setFornecedorTargetIndex(null);
   }
 
   function resetForm(form: HTMLFormElement) {
@@ -211,6 +255,9 @@ const [meiosPagamento, setMeiosPagamento] = useState<MeioPagamento[]>([]);
     setGlobalAccountId("");
     setItems([emptyItem("USD")]);
     setIsOpen(false);
+    setIsFornecedorModalOpen(false);
+    setFornecedorTargetIndex(null);
+    setActiveFornecedorIndex(0);
   }
 
   function onSubmit(event: FormEvent<HTMLFormElement>) {
@@ -392,6 +439,9 @@ const [meiosPagamento, setMeiosPagamento] = useState<MeioPagamento[]>([]);
                 value={item}
                 onChange={handleItemChange}
                 onRemove={handleItemRemove}
+                onFornecedorFocus={setActiveFornecedorIndex}
+                onAddFornecedor={openFornecedorModal}
+                showAddFornecedorButton={idx === 0}
                 showRemove={items.length > 1}
               />
             ))}
@@ -612,6 +662,10 @@ const [meiosPagamento, setMeiosPagamento] = useState<MeioPagamento[]>([]);
 
         </form>
       )}
+
+      {isFornecedorModalOpen ? (
+        <FornecedorCreateModal onClose={closeFornecedorModal} onCreated={handleFornecedorCreated} />
+      ) : null}
 
       {feedback ? <p className="subtle">{feedback}</p> : null}
     </>

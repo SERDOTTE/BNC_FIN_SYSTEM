@@ -2,6 +2,7 @@
 
 import { FormEvent, useState, useTransition } from "react";
 
+import { FornecedorCreateModal } from "@/components/fornecedor-create-modal";
 import { SectionCard } from "@/components/section-card";
 import type { Supplier } from "@/lib/types";
 
@@ -16,36 +17,14 @@ export function FornecedoresSection({ initialSuppliers }: Props) {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState("");
   const [error, setError] = useState("");
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
 
-  // ── CREATE ──────────────────────────────────────────────
-  function handleCreate(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const nome = (new FormData(form).get("nome") as string ?? "").trim();
-    if (!nome) return;
-
-    startTransition(async () => {
-      try {
-        const res = await fetch("/api/fornecedores", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ nome }),
-        });
-        if (!res.ok) {
-          const data = await res.json() as { error?: string };
-          setError(data.error ?? "Erro ao criar fornecedor.");
-          return;
-        }
-        const created = await res.json() as Supplier;
-        setSuppliers((prev) => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
-        setFeedback(`Fornecedor "${created.name}" cadastrado.`);
-        setError("");
-        form.reset();
-      } catch {
-        setError("Erro ao criar fornecedor.");
-      }
-    });
+  function handleCreateFromModal(created: Supplier) {
+    setSuppliers((prev) => [...prev.filter((s) => s.id !== created.id), created].sort((a, b) => a.name.localeCompare(b.name)));
+    setFeedback(`Fornecedor "${created.name}" cadastrado.`);
+    setError("");
+    setIsCreateModalOpen(false);
   }
 
   // ── EDIT ────────────────────────────────────────────────
@@ -220,23 +199,19 @@ export function FornecedoresSection({ initialSuppliers }: Props) {
           </p>
         ) : null}
 
-        <form className="form-grid" onSubmit={handleCreate}>
-          <div className="field full">
-            <label htmlFor="forn-nome">Nome do fornecedor</label>
-            <input
-              id="forn-nome"
-              name="nome"
-              placeholder="Ex: Passeios Caribe Ltda"
-              required
-            />
-          </div>
-          <div className="field full cta-row">
-            <button className="btn primary" type="submit" disabled={isPending}>
-              {isPending ? "Salvando..." : "Cadastrar"}
-            </button>
-          </div>
-        </form>
+        <div className="field full cta-row" style={{ marginTop: 0 }}>
+          <button className="btn primary" type="button" onClick={() => setIsCreateModalOpen(true)} disabled={isPending}>
+            Adicionar fornecedor
+          </button>
+        </div>
       </SectionCard>
+
+      {isCreateModalOpen ? (
+        <FornecedorCreateModal
+          onClose={() => setIsCreateModalOpen(false)}
+          onCreated={(created) => handleCreateFromModal(created as Supplier)}
+        />
+      ) : null}
     </section>
   );
 }

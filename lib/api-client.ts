@@ -97,6 +97,10 @@ export async function listFornecedores(): Promise<LookupOption[]> {
   return fetchRouteJson<LookupOption[]>("/api/fornecedores");
 }
 
+export async function createFornecedor(payload: { nome: string }): Promise<LookupOption> {
+  return sendRouteJson<LookupOption, { nome: string }>("/api/fornecedores", "POST", payload);
+}
+
 export async function listMeiosPagamento(): Promise<Array<LookupOption & { tipo: string; contaRecebimento?: string }>> {
   return fetchRouteJson<Array<LookupOption & { tipo: string; contaRecebimento?: string }>>("/api/meios-pagamento");
 }

@@ -13,6 +13,9 @@ type Props = {
   value: SaleItem;
   onChange: (index: number, value: SaleItem) => void;
   onRemove: (index: number) => void;
+  onAddFornecedor: () => void;
+  onFornecedorFocus: (index: number) => void;
+  showAddFornecedorButton: boolean;
   showRemove: boolean;
 };
 
@@ -44,6 +47,9 @@ export function SaleItemRow({
   value,
   onChange,
   onRemove,
+  onFornecedorFocus,
+  onAddFornecedor,
+  showAddFornecedorButton,
   showRemove,
 }: Props) {
   const [loadingPreco, setLoadingPreco] = useState(false);
@@ -113,10 +119,25 @@ export function SaleItemRow({
 
       {/* Fornecedor */}
       <div>
-        {index === 0 && <label style={labelStyle}>Fornecedor</label>}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4, minHeight: 20 }}>
+          {index === 0 ? <label style={{ ...labelStyle, marginBottom: 0 }}>Fornecedor</label> : <span />}
+          {showAddFornecedorButton ? (
+            <button
+              type="button"
+              className="btn secondary"
+              style={{ padding: "3px 8px", fontSize: "0.78rem", whiteSpace: "nowrap" }}
+              onClick={onAddFornecedor}
+            >
+              Adicionar fornecedor
+            </button>
+          ) : (
+            <span />
+          )}
+        </div>
         <select
           style={inputStyle}
           value={value.fornecedorId}
+          onFocus={() => onFornecedorFocus(index)}
           onChange={(e) => {
             const f = fornecedores.find((x) => x.id === e.target.value);
             update({ fornecedorId: e.target.value, fornecedorNome: f?.name ?? "" });
