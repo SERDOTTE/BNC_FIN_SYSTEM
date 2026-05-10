@@ -11,6 +11,7 @@ export default async function HomePage() {
   const year = now.getFullYear();
   const currentMonthLabel = new Intl.DateTimeFormat("pt-BR", { month: "long" }).format(now);
   const currentMonthTitle = currentMonthLabel.charAt(0).toUpperCase() + currentMonthLabel.slice(1);
+  const currentMonthYearTitle = `${currentMonthTitle} ${year}`;
 
   const [dashboard, dailyFlow] = await Promise.all([
     buildDashboardData(),
@@ -31,8 +32,9 @@ export default async function HomePage() {
           </div>
         </div>
         <div className="summary-card">
-          <span className="subtle">Recebimento do mês · {currentMonthTitle}</span>
+          <span className="subtle">Total do mês · {currentMonthYearTitle}</span>
           <strong>{formatCurrency(dashboard.monthReceived + dashboard.monthToReceive + dashboard.monthOverdue, "BRL")}</strong>
+          <span className="subtle">Soma de recebido, a receber e em atraso no mês (BRL)</span>
           <div className="kpi-list">
             <div className="kpi-row">
               <span className="subtle">Recebido no mês</span>
