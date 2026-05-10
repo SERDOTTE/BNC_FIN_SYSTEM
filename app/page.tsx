@@ -1,9 +1,10 @@
 import { DashboardDailyFlowChart } from "@/components/dashboard-daily-flow-chart";
+import { DashboardMonthInsights } from "@/components/dashboard-month-insights";
 import { PageHeader } from "@/components/page-header";
 import { SectionCard } from "@/components/section-card";
 import { StatCard } from "@/components/stat-card";
 import { formatCurrency, formatDate } from "@/lib/formatters";
-import { buildDailyCashFlow, buildDashboardData } from "@/lib/server/loaders";
+import { buildDailyCashFlow, buildDashboardData, buildDashboardMonthlyBreakdown } from "@/lib/server/loaders";
 
 export default async function HomePage() {
   const now = new Date();
@@ -13,10 +14,14 @@ export default async function HomePage() {
   const currentMonthTitle = currentMonthLabel.charAt(0).toUpperCase() + currentMonthLabel.slice(1);
   const currentMonthYearTitle = `${currentMonthTitle} ${year}`;
 
-  const [dashboard, dailyFlow] = await Promise.all([
+  const [dashboard, dailyFlow, monthlyBreakdown] = await Promise.all([
     buildDashboardData(),
-    buildDailyCashFlow(month, year)
+    buildDailyCashFlow(month, year),
+    buildDashboardMonthlyBreakdown(month, year)
   ]);
+  const attentionItems = dashboard.attentionItems ?? [];
+  const scenarios = dashboard.scenarios ?? [];
+  const cashTimeline = dashboard.cashTimeline ?? [];
 
   return (
     <div className="page">
@@ -32,23 +37,10 @@ export default async function HomePage() {
           </div>
         </div>
         <div className="summary-card">
-          <span className="subtle">Total do mês · {currentMonthYearTitle}</span>
+          <span className="subtle">Total do mes · {currentMonthYearTitle}</span>
           <strong>{formatCurrency(dashboard.monthReceived + dashboard.monthToReceive + dashboard.monthOverdue, "BRL")}</strong>
-          <span className="subtle">Soma de recebido, a receber e em atraso no mês (BRL)</span>
-          <div className="kpi-list">
-            <div className="kpi-row">
-              <span className="subtle">Recebido no mês</span>
-              <span>{formatCurrency(dashboard.monthReceived, "BRL")}</span>
-            </div>
-            <div className="kpi-row">
-              <span className="subtle">Receber no mês</span>
-              <span>{formatCurrency(dashboard.monthToReceive, "BRL")}</span>
-            </div>
-            <div className="kpi-row">
-              <span className="subtle">Atraso no mês</span>
-              <span>{formatCurrency(dashboard.monthOverdue, "BRL")}</span>
-            </div>
-          </div>
+          <span className="subtle">Soma de recebido, a receber e em atraso no mes (BRL)</span>
+          <DashboardMonthInsights initialMonth={month} initialYear={year} initialData={monthlyBreakdown} />
         </div>
       </section>
 
@@ -78,7 +70,7 @@ export default async function HomePage() {
               </tr>
             </thead>
             <tbody>
-              {dashboard.attentionItems.map((item) => (
+              {attentionItems.map((item) => (
                 <tr key={item.id}>
                   <td>
                     <strong>{item.title}</strong>
@@ -99,7 +91,7 @@ export default async function HomePage() {
 
         <SectionCard title="Leitura de cenário" description="Como o câmbio futuro altera o caixa esperado.">
           <div className="kpi-list">
-            {dashboard.scenarios.map((scenario) => (
+            {scenarios.map((scenario) => (
               <div className="kpi-row" key={scenario.name}>
                 <div>
                   <strong>{scenario.name}</strong>
@@ -116,7 +108,7 @@ export default async function HomePage() {
 
       <SectionCard title="Linha do tempo do caixa" description="Eventos de entrada e saída que moldam a posição projetada.">
         <div className="timeline">
-          {dashboard.cashTimeline.map((item) => (
+          {cashTimeline.map((item) => (
             <div className="timeline-item" key={item.id}>
               <strong>{item.title}</strong>
               <span className="subtle">{formatDate(item.date)} · {item.description}</span>

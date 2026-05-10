@@ -312,6 +312,75 @@ textarea {
   padding-bottom: 0;
 }
 
+.month-insights-wrap {
+  display: grid;
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.month-insights-left {
+  display: grid;
+  gap: 12px;
+}
+
+.month-filter-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.month-field {
+  min-width: 140px;
+}
+
+.month-kpi-list {
+  gap: 10px;
+}
+
+.month-kpi-button {
+  text-align: left;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.68);
+  border-radius: 14px;
+  padding: 10px 12px;
+  cursor: pointer;
+  display: grid;
+  gap: 2px;
+  color: var(--ink);
+}
+
+.month-kpi-button strong {
+  margin-top: 4px;
+  font-size: 1.2rem;
+}
+
+.month-kpi-button:hover {
+  border-color: rgba(15, 43, 69, 0.24);
+  box-shadow: 0 12px 24px rgba(13, 74, 120, 0.08);
+}
+
+.month-sales-panel {
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 14px;
+  padding: 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.month-link-button {
+  border: 0;
+  background: transparent;
+  color: var(--warn);
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+}
+
+.month-link-button:hover {
+  text-decoration: underline;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;
@@ -826,6 +895,12 @@ tr:last-child td {
   align-items: flex-start;
 }
 
+.modal-actions-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .flow-detail-header h3 {
   margin: 0;
 }
@@ -859,6 +934,14 @@ tr:last-child td {
   .sidebar {
     border-right: none;
     border-bottom: 1px solid var(--line);
+  }
+
+  .month-filter-row {
+    flex-direction: column;
+  }
+
+  .month-field {
+    min-width: 100%;
   }
 }
 

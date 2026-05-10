@@ -102,6 +102,49 @@ export type DashboardData = {
   cashTimeline: TimelineItem[];
 };
 
+export type DashboardMonthlyInstallmentDetail = {
+  installmentId: string;
+  receivableId: string;
+  customerName: string;
+  saleCode?: string;
+  saleNumber?: number;
+  installmentNumber: number;
+  dueDate: string;
+  paymentDate?: string;
+  amountBrl: number;
+  status: Installment["status"];
+};
+
+export type DashboardMonthlySaleDetail = {
+  receivableId: string;
+  customerName: string;
+  saleCode?: string;
+  saleNumber?: number;
+  saleDate: string;
+  status: Receivable["status"];
+  installmentsCount: number;
+  totalSaleBrl: number;
+  projectedReceiptsBrl: number;
+  receivedBrl: number;
+  pendingBrl: number;
+  overdueBrl: number;
+};
+
+export type DashboardMonthlyBreakdown = {
+  month: number;
+  year: number;
+  monthReceived: number;
+  monthToReceive: number;
+  monthOverdue: number;
+  installmentsReceived: DashboardMonthlyInstallmentDetail[];
+  installmentsToReceive: DashboardMonthlyInstallmentDetail[];
+  installmentsOverdue: DashboardMonthlyInstallmentDetail[];
+  salesCount: number;
+  totalSalesMonthBrl: number;
+  projectedReceiptsMonthBrl: number;
+  sales: DashboardMonthlySaleDetail[];
+};
+
 export type ReportsData = {
   scenarioCards: Array<{
     name: string;

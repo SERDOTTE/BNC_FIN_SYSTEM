@@ -6,6 +6,9 @@ import { buildReportsData } from "@/lib/server/loaders";
 
 export default async function ReportsPage() {
   const report = await buildReportsData();
+  const scenarioCards = report.scenarioCards ?? [];
+  const projectedByDate = report.projectedByDate ?? [];
+  const exposureMonthly = report.exposureMonthly ?? [];
 
   return (
     <div className="page">
@@ -16,7 +19,7 @@ export default async function ReportsPage() {
       </SectionCard>
 
       <section className="stats-grid">
-        {report.scenarioCards.map((scenario) => (
+        {scenarioCards.map((scenario) => (
           <div key={scenario.name} className="stat-card">
             <span className={`chip ${scenario.name === "Pessimista" ? "danger" : scenario.name === "Base" ? "warning" : "positive"}`}>{scenario.name}</span>
             <strong>{formatCurrency(scenario.netProjected, "BRL")}</strong>
@@ -37,7 +40,7 @@ export default async function ReportsPage() {
               </tr>
             </thead>
             <tbody>
-              {report.projectedByDate.map((item) => (
+              {projectedByDate.map((item) => (
                 <tr key={item.date}>
                   <td>{item.date}</td>
                   <td className="money positive">{formatCurrency(item.inflow, "BRL")}</td>
@@ -60,7 +63,7 @@ export default async function ReportsPage() {
               </tr>
             </thead>
             <tbody>
-              {report.exposureMonthly.map((item) => (
+              {exposureMonthly.map((item) => (
                 <tr key={item.month}>
                   <td>{item.month}</td>
                   <td>{formatCurrency(item.netUsd, "USD")}</td>

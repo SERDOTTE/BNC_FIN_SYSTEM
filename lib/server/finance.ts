@@ -1,4 +1,13 @@
-import type { Currency, DailyFlowInflowDetail, DailyFlowPoint, DashboardData, ReportsData } from "@/lib/types";
+import type {
+  Currency,
+  DailyFlowInflowDetail,
+  DailyFlowPoint,
+  DashboardData,
+  DashboardMonthlyBreakdown,
+  DashboardMonthlyInstallmentDetail,
+  DashboardMonthlySaleDetail,
+  ReportsData
+} from "@/lib/types";
 import {
   companyIdFromEnv,
   readCurrency,
@@ -48,6 +57,14 @@ function isOpenStatus(status: string) {
   return status === "PENDING" || status === "OPEN" || status === "PARTIALLY_PAID" || status === "OVERDUE";
 }
 
+function isOverdueByDate(status: string, dueDate: string | undefined, todayIso: string) {
+  if (status === "OVERDUE") {
+    return true;
+  }
+
+  return (status === "PENDING" || status === "OPEN" || status === "PARTIALLY_PAID") && !!dueDate && dueDate < todayIso;
+}
+
 async function selectWithCompany<T extends SupabaseRow>(path: string): Promise<T[]> {
   const companyId = companyIdFromEnv();
   const separator = path.includes("?") ? "&" : "?";
@@ -82,6 +99,174 @@ function mapInstallmentAmount(row: InstallmentRow) {
 
 function mapPayableAmount(row: SupabaseRow) {
   return readNumber(row, ["projected_amount_brl_base", "amount", "amount_converted", "amount_contract"]);
+}
+
+function readInstallmentAmountBrl(row: InstallmentRow) {
+  return readNumber(row, ["projected_amount_brl_base", "amount", "amount_converted", "amount_contract"]);
+}
+
+function toMonthKeyByNumber(month: number, year: number) {
+  return `${year}-${String(month).padStart(2, "0")}`;
+}
+
+function readReceivableTotalBrl(receivable: SupabaseRow, installments: InstallmentRow[]) {
+  const currency = readCurrency(receivable, ["currency"]);
+  const totalAmount = readNumber(receivable, ["total_amount"]);
+  const fxRate = readNumber(receivable, ["fx_rate_usd_brl"]);
+
+  if (currency === "BRL") {
+    return totalAmount;
+  }
+
+  if (fxRate > 0) {
+    return Number((totalAmount * fxRate).toFixed(2));
+  }
+
+  return installments.reduce((sum, item) => sum + readInstallmentAmountBrl(item), 0);
+}
+
+export async function buildDashboardMonthlyBreakdown(month: number, year: number): Promise<DashboardMonthlyBreakdown> {
+  const selectedMonthKey = toMonthKeyByNumber(month, year);
+  const todayIso = formatDate(new Date());
+
+  const [installments, receivables] = await Promise.all([
+    getInstallments(),
+    selectWithCompany<SupabaseRow>(
+      "receivables?select=*,receivable_installments(*)&order=sale_date.asc,sale_number.asc"
+    )
+  ]);
+
+  const installmentsReceived: DashboardMonthlyInstallmentDetail[] = [];
+  const installmentsToReceive: DashboardMonthlyInstallmentDetail[] = [];
+  const installmentsOverdue: DashboardMonthlyInstallmentDetail[] = [];
+
+  let monthReceived = 0;
+  let monthToReceive = 0;
+  let monthOverdue = 0;
+
+  for (const row of installments) {
+    const dueDate = toIsoDate(row.due_date);
+    const paymentDate = toIsoDate(row.payment_date);
+    const rawStatus = readFirstString(row, ["status"]) || "PENDING";
+    const isLate = isOverdueByDate(rawStatus, dueDate, todayIso);
+    const status = (isLate ? "OVERDUE" : rawStatus) as DashboardMonthlyInstallmentDetail["status"];
+    const dueMonthKey = dueDate ? monthKey(dueDate) : "";
+    const paymentMonthKey = paymentDate ? monthKey(paymentDate) : "";
+    const amountBrl = readInstallmentAmountBrl(row);
+    const receivable = (row.receivables as SupabaseRow | null) ?? {};
+
+    const detail: DashboardMonthlyInstallmentDetail = {
+      installmentId: readFirstString(row, ["id"]),
+      receivableId: readFirstString(row, ["receivable_id"]),
+      customerName: readFirstString(receivable, ["customer_name"]),
+      saleCode: readFirstString(receivable, ["sale_code"]) || undefined,
+      saleNumber: readNumber(receivable, ["sale_number"]) || undefined,
+      installmentNumber: readNumber(row, ["installment_number"]),
+      dueDate,
+      paymentDate: paymentDate || undefined,
+      amountBrl,
+      status
+    };
+
+    if (status === "PAID" && paymentMonthKey === selectedMonthKey) {
+      monthReceived += amountBrl;
+      installmentsReceived.push(detail);
+      continue;
+    }
+
+    if (status !== "CANCELED" && status !== "PAID" && dueMonthKey === selectedMonthKey) {
+      if (isLate) {
+        monthOverdue += amountBrl;
+        installmentsOverdue.push(detail);
+      } else {
+        monthToReceive += amountBrl;
+        installmentsToReceive.push(detail);
+      }
+    }
+  }
+
+  installmentsReceived.sort((left, right) => {
+    const leftDate = left.paymentDate || left.dueDate;
+    const rightDate = right.paymentDate || right.dueDate;
+    return leftDate.localeCompare(rightDate);
+  });
+  installmentsToReceive.sort((left, right) => left.dueDate.localeCompare(right.dueDate));
+  installmentsOverdue.sort((left, right) => left.dueDate.localeCompare(right.dueDate));
+
+  const sales: DashboardMonthlySaleDetail[] = [];
+
+  for (const row of receivables) {
+    const saleDate = toIsoDate(row.sale_date);
+    if (!saleDate || monthKey(saleDate) !== selectedMonthKey) {
+      continue;
+    }
+
+    const status = (readFirstString(row, ["status"]) || "OPEN") as DashboardMonthlySaleDetail["status"];
+    if (status === "CANCELED") {
+      continue;
+    }
+
+    const allSaleInstallments = ((row.receivable_installments as InstallmentRow[] | undefined) ?? []);
+    const saleInstallments = allSaleInstallments.filter(
+      (item) => (readFirstString(item, ["status"]) || "PENDING") !== "CANCELED"
+    );
+
+    let projectedReceiptsBrl = 0;
+    let receivedBrl = 0;
+    let pendingBrl = 0;
+    let overdueBrl = 0;
+
+    for (const installment of saleInstallments) {
+      const amountBrl = readInstallmentAmountBrl(installment);
+      const installmentStatus = readFirstString(installment, ["status"]) || "PENDING";
+      const installmentDueDate = toIsoDate(installment.due_date);
+      const isLate = isOverdueByDate(installmentStatus, installmentDueDate, todayIso);
+
+      projectedReceiptsBrl += amountBrl;
+      if (installmentStatus === "PAID") {
+        receivedBrl += amountBrl;
+      } else if (isLate) {
+        overdueBrl += amountBrl;
+      } else {
+        pendingBrl += amountBrl;
+      }
+    }
+
+    sales.push({
+      receivableId: readFirstString(row, ["id"]),
+      customerName: readFirstString(row, ["customer_name"]),
+      saleCode: readFirstString(row, ["sale_code"]) || undefined,
+      saleNumber: readNumber(row, ["sale_number"]) || undefined,
+      saleDate,
+      status,
+      installmentsCount: saleInstallments.length,
+      totalSaleBrl: Number(allSaleInstallments.reduce((sum, item) => sum + readInstallmentAmountBrl(item), 0).toFixed(2)),
+      projectedReceiptsBrl: Number(projectedReceiptsBrl.toFixed(2)),
+      receivedBrl: Number(receivedBrl.toFixed(2)),
+      pendingBrl: Number(pendingBrl.toFixed(2)),
+      overdueBrl: Number(overdueBrl.toFixed(2))
+    });
+  }
+
+  sales.sort((left, right) => left.saleDate.localeCompare(right.saleDate));
+
+  const totalSalesMonthBrl = sales.reduce((sum, item) => sum + item.totalSaleBrl, 0);
+  const projectedReceiptsMonthBrl = sales.reduce((sum, item) => sum + item.projectedReceiptsBrl, 0);
+
+  return {
+    month,
+    year,
+    monthReceived: Number(monthReceived.toFixed(2)),
+    monthToReceive: Number(monthToReceive.toFixed(2)),
+    monthOverdue: Number(monthOverdue.toFixed(2)),
+    installmentsReceived,
+    installmentsToReceive,
+    installmentsOverdue,
+    salesCount: sales.length,
+    totalSalesMonthBrl: Number(totalSalesMonthBrl.toFixed(2)),
+    projectedReceiptsMonthBrl: Number(projectedReceiptsMonthBrl.toFixed(2)),
+    sales
+  };
 }
 
 export async function buildDashboardData(): Promise<DashboardData> {

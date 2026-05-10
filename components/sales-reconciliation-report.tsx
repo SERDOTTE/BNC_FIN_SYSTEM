@@ -36,9 +36,9 @@ type ReportData = {
 
 function statusLabel(status: string) {
   switch (status) {
-    case "PAID": return "Recebido";
-    case "PENDING": return "A Receber";
-    case "OVERDUE": return "Atrasado";
+    case "PAID":     return "Recebido";
+    case "PENDING":  return "Receber";
+    case "OVERDUE":  return "Atraso";
     case "CANCELED": return "Cancelado";
     default: return status;
   }
@@ -162,6 +162,8 @@ export function SalesReconciliationReport() {
   const totalPendingBrl = report?.sales.reduce((sum, sale) =>
     sum + sale.installments.filter((i) => i.status !== "PAID" && i.status !== "CANCELED").reduce((s, i) => s + i.amountBrl, 0), 0) ?? 0;
 
+  const reportSales = report?.sales ?? [];
+
   return (
     <div>
       {/* Controls – hidden on print */}
@@ -197,11 +199,11 @@ export function SalesReconciliationReport() {
             </p>
           </div>
 
-          {report.sales.length === 0 ? (
+          {reportSales.length === 0 ? (
             <p className="subtle">Nenhuma venda encontrada para o período selecionado.</p>
           ) : (
             <>
-              {report.sales.map((sale) => {
+              {reportSales.map((sale) => {
                 const salePaidBrl = sale.installments
                   .filter((i) => i.status === "PAID")
                   .reduce((s, i) => s + i.amountBrl, 0);
@@ -312,7 +314,7 @@ export function SalesReconciliationReport() {
                 <div>
                   <p style={{ margin: 0, fontSize: "0.8rem", color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em" }}>Vendas no Mês</p>
                   <p style={{ margin: "0.25rem 0 0", fontSize: "1.1rem", fontWeight: 600 }}>
-                    {report.sales.length}
+                    {reportSales.length}
                   </p>
                 </div>
               </div>

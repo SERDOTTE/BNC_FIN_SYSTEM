@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 
 import { payInstallment } from "@/lib/api-client";
-import { formatCurrency, formatDate } from "@/lib/formatters";
+import { formatCurrency, formatDate, resolveInstallmentStatus, installmentStatusLabel, installmentStatusTone } from "@/lib/formatters";
 import type { Installment } from "@/lib/types";
 
 type InstallmentsTableProps = {
@@ -15,39 +15,6 @@ export function InstallmentsTable({ initialInstallments, defaultAccountId }: Ins
   const [installments, setInstallments] = useState(initialInstallments);
   const [feedback, setFeedback] = useState<string>("");
   const [isPending, startTransition] = useTransition();
-
-  function isPastDue(dueDateIso: string) {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const dueDate = new Date(`${dueDateIso}T00:00:00`);
-    return dueDate.getTime() < today.getTime();
-  }
-
-  function resolveQueueStatus(installment: Installment): "PAID" | "OVERDUE" | "RECEBER" {
-    if (installment.status === "PAID") {
-      return "PAID";
-    }
-
-    if (installment.status === "OVERDUE" || isPastDue(installment.dueDate)) {
-      return "OVERDUE";
-    }
-
-    return "RECEBER";
-  }
-
-  function getStatusMeta(status: "PAID" | "OVERDUE" | "RECEBER") {
-    switch (status) {
-      case "PAID":
-        return { label: "RECEBIDO", tone: "positive" };
-      case "OVERDUE":
-        return { label: "ATRASO", tone: "danger" };
-      case "RECEBER":
-        return { label: "RECEBER", tone: "warning" };
-      default:
-        return { label: status, tone: "warning" };
-    }
-  }
 
   function handlePay(installment: Installment) {
     startTransition(async () => {
@@ -90,8 +57,9 @@ export function InstallmentsTable({ initialInstallments, defaultAccountId }: Ins
         </thead>
         <tbody>
           {installments.map((installment) => {
-            const queueStatus = resolveQueueStatus(installment);
-            const statusMeta = getStatusMeta(queueStatus);
+            const resolvedStatus = resolveInstallmentStatus(installment.status, installment.dueDate);
+            const label = installmentStatusLabel(resolvedStatus);
+            const tone = installmentStatusTone(resolvedStatus);
 
             return <tr key={installment.id}>
               <td>
@@ -105,8 +73,8 @@ export function InstallmentsTable({ initialInstallments, defaultAccountId }: Ins
               <td>{formatCurrency(installment.amountContract, installment.currencyContract)}</td>
               <td>{formatCurrency(installment.projectedAmountBrlBase, "BRL")}</td>
               <td>
-                <span className={`chip ${statusMeta.tone}`}>
-                  {statusMeta.label}
+                <span className={`chip ${tone}`}>
+                  {label}
                 </span>
               </td>
               <td>

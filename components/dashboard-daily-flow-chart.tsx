@@ -39,7 +39,7 @@ const months = [
 export function DashboardDailyFlowChart({ initialData, initialMonth, initialYear }: DashboardDailyFlowChartProps) {
   const [month, setMonth] = useState(initialMonth);
   const [year, setYear] = useState(initialYear);
-  const [data, setData] = useState(initialData);
+  const [data, setData] = useState(Array.isArray(initialData) ? initialData : []);
   const [error, setError] = useState<string>("");
   const [barTooltip, setBarTooltip] = useState<TooltipState | null>(null);
   const [lineTooltip, setLineTooltip] = useState<TooltipState | null>(null);
@@ -86,7 +86,7 @@ export function DashboardDailyFlowChart({ initialData, initialMonth, initialYear
     startTransition(async () => {
       try {
         const next = await getDailyCashFlowByMonth(month, year);
-        setData(next);
+        setData(Array.isArray(next) ? next : []);
         setError("");
         setBarTooltip(null);
         setLineTooltip(null);

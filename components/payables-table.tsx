@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 
 import { payPayable } from "@/lib/api-client";
-import { formatCurrency, formatDate } from "@/lib/formatters";
+import { formatCurrency, formatDate, payableStatusLabel } from "@/lib/formatters";
 import type { Payable } from "@/lib/types";
 
 type PayablesTableProps = {
@@ -63,8 +63,8 @@ export function PayablesTable({ initialPayables, defaultAccountId }: PayablesTab
               <td>{formatCurrency(payable.amountContract, payable.currencyContract)}</td>
               <td>{formatCurrency(payable.projectedAmountBrlBase, "BRL")}</td>
               <td>
-                <span className={`chip ${payable.status === "PAID" ? "positive" : payable.status === "OVERDUE" ? "danger" : "warning"}`}>
-                  {payable.status}
+                <span className={`chip ${payable.status === "PAID" ? "positive" : payable.status === "OVERDUE" || (payable.status !== "CANCELED" && payable.dueDate < new Date().toISOString().slice(0, 10)) ? "danger" : "warning"}`}>
+                  {payableStatusLabel(payable.status, payable.dueDate)}
                 </span>
               </td>
               <td>

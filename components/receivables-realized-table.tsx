@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 
 import { deleteReceivable, updateInstallmentStatus } from "../lib/api-client";
 import { ReceivableEditModal } from "@/components/receivable-edit-modal";
-import { formatCurrency, formatDate } from "@/lib/formatters";
+import { formatCurrency, formatDate, resolveInstallmentStatus, installmentStatusLabel } from "@/lib/formatters";
 import type { Installment, Receivable } from "@/lib/types";
 
 type ReceivablesRealizedTableProps = {
@@ -46,32 +46,14 @@ function formatMonthLabel(monthKey: string) {
   return `${monthName} / ${year}`;
 }
 
-function isOverdueInstallment(installment: Installment) {
-  if (installment.status === "PAID") {
-    return false;
-  }
-
-  if (installment.status === "OVERDUE") {
-    return true;
-  }
-
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  const dueDate = new Date(`${installment.dueDate}T00:00:00`);
-  return dueDate.getTime() < today.getTime();
-}
-
 function installmentStatusMeta(installment: Installment) {
-  if (installment.status === "PAID") {
-    return { label: "Recebido", className: "tooltip-status-paid" };
-  }
-
-  if (isOverdueInstallment(installment)) {
-    return { label: "Vencido", className: "tooltip-status-overdue" };
-  }
-
-  return { label: "A receber", className: "tooltip-status-pending" };
+  const resolved = resolveInstallmentStatus(installment.status, installment.dueDate);
+  const label = installmentStatusLabel(resolved);
+  const className =
+    resolved === "PAID" ? "tooltip-status-paid" :
+    resolved === "OVERDUE" ? "tooltip-status-overdue" :
+    "tooltip-status-pending";
+  return { label, className };
 }
 
 const flowStatusCycle: Array<"PENDING" | "OVERDUE" | "PAID"> = ["PENDING", "OVERDUE", "PAID"];
@@ -446,12 +428,11 @@ export function ReceivablesRealizedTable({ receivables, installments }: Receivab
                 <tbody>
                   {filteredInstallmentsByReceiptMonth.length ? (
                     filteredInstallmentsByReceiptMonth.map((installment) => {
+                      const resolvedStatus = resolveInstallmentStatus(installment.status, installment.dueDate);
                       const currentStatus: FlowInstallmentStatus =
-                        installment.status === "PAID"
-                          ? "PAID"
-                          : installment.status === "OVERDUE" || isOverdueInstallment(installment)
-                            ? "OVERDUE"
-                            : "PENDING";
+                        resolvedStatus === "PAID" ? "PAID" :
+                        resolvedStatus === "OVERDUE" ? "OVERDUE" :
+                        "PENDING";
 
                       return (
                         <tr key={installment.id}>

@@ -5,6 +5,7 @@ import type {
   CreateReceivableRequest,
   DailyFlowPoint,
   DashboardData,
+  DashboardMonthlyBreakdown,
   Installment,
   LookupOption,
   PayInstallmentRequest,
@@ -71,6 +72,10 @@ function getMonthRange(month: number, year: number) {
 
 export async function getDashboardData(): Promise<DashboardData> {
   return fetchRouteJson<DashboardData>("/api/dashboard");
+}
+
+export async function getDashboardMonthlyBreakdown(month: number, year: number): Promise<DashboardMonthlyBreakdown> {
+  return fetchRouteJson<DashboardMonthlyBreakdown>(`/api/dashboard/monthly?month=${month}&year=${year}`);
 }
 
 export async function listAccounts(): Promise<Account[]> {

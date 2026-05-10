@@ -1,5 +1,5 @@
 import type { Account, Installment, LookupOption, Payable, Receivable, Supplier } from "@/lib/types";
-import { buildDailyCashFlow, buildDashboardData, buildReportsData } from "@/lib/server/finance";
+import { buildDailyCashFlow, buildDashboardData, buildDashboardMonthlyBreakdown, buildReportsData } from "@/lib/server/finance";
 import { companyIdFromEnv, readCurrency, readFirstString, readNumber, supabaseSelect, toIsoDate, type SupabaseRow } from "@/lib/server/supabase-admin";
 
 type InstallmentRow = SupabaseRow & {
@@ -114,4 +114,4 @@ export async function listPayablesServer(): Promise<Payable[]> {
   }));
 }
 
-export { buildDashboardData, buildDailyCashFlow, buildReportsData };
+export { buildDashboardData, buildDailyCashFlow, buildReportsData, buildDashboardMonthlyBreakdown };
