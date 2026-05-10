@@ -199,7 +199,7 @@ textarea {
 .hero {
   padding: 28px;
   display: grid;
-  grid-template-columns: 1.3fr 0.9fr;
+  grid-template-columns: 1fr;
   gap: 20px;
 }
 
@@ -243,6 +243,10 @@ textarea {
   border-radius: var(--radius-md);
   border: 1px solid var(--line);
   background: var(--panel-strong);
+}
+
+.summary-card {
+  display: grid;
 }
 
 .stat-card strong,
@@ -314,13 +318,25 @@ textarea {
 
 .month-insights-wrap {
   display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(240px, 0.6fr);
   gap: 14px;
-  margin-top: 14px;
+  margin-top: 0;
+  align-items: start;
 }
 
 .month-insights-left {
   display: grid;
   gap: 12px;
+}
+
+.month-current-summary {
+  display: grid;
+  gap: 6px;
+}
+
+.month-current-summary strong {
+  margin-top: 2px;
+  font-size: 1.8rem;
 }
 
 .month-filter-row {
@@ -928,6 +944,10 @@ tr:last-child td {
   .two-col,
   .stats-grid,
   .metric-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .month-insights-wrap {
     grid-template-columns: 1fr;
   }
 

@@ -31,16 +31,16 @@ export default async function HomePage() {
             title="Controle Financeiro"
             description="Visão consolidada do caixa atual, entradas futuras, saídas previstas e exposição em USD para apoiar decisão operacional diária."
           />
-          <div className="cta-row">
-            <span className="chip positive">Caixa real atualizado</span>
-            <span className="chip warning">Projeção por cenário ativo</span>
-          </div>
+          
         </div>
         <div className="summary-card">
-          <span className="subtle">Total do mes · {currentMonthYearTitle}</span>
-          <strong>{formatCurrency(dashboard.monthReceived + dashboard.monthToReceive + dashboard.monthOverdue, "BRL")}</strong>
-          <span className="subtle">Soma de recebido, a receber e em atraso no mes (BRL)</span>
-          <DashboardMonthInsights initialMonth={month} initialYear={year} initialData={monthlyBreakdown} />
+          <DashboardMonthInsights
+            initialMonth={month}
+            initialYear={year}
+            initialData={monthlyBreakdown}
+            currentMonthYearTitle={currentMonthYearTitle}
+            currentMonthTotalBrl={dashboard.monthReceived + dashboard.monthToReceive + dashboard.monthOverdue}
+          />
         </div>
       </section>
 

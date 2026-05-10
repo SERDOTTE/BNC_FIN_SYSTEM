@@ -10,6 +10,8 @@ type DashboardMonthInsightsProps = {
   initialMonth: number;
   initialYear: number;
   initialData: DashboardMonthlyBreakdown;
+  currentMonthYearTitle?: string;
+  currentMonthTotalBrl?: number;
 };
 
 type DetailModal = "received" | "toReceive" | "overdue" | "sales" | null;
@@ -72,7 +74,13 @@ function escapeHtml(value: string) {
     .replace(/'/g, "&#39;");
 }
 
-export function DashboardMonthInsights({ initialMonth, initialYear, initialData }: DashboardMonthInsightsProps) {
+export function DashboardMonthInsights({
+  initialMonth,
+  initialYear,
+  initialData,
+  currentMonthYearTitle,
+  currentMonthTotalBrl
+}: DashboardMonthInsightsProps) {
   const [month, setMonth] = useState(initialMonth);
   const [year, setYear] = useState(initialYear);
   const [data, setData] = useState<DashboardMonthlyBreakdown>(initialData);
@@ -251,6 +259,14 @@ export function DashboardMonthInsights({ initialMonth, initialYear, initialData 
   return (
     <div className="month-insights-wrap">
       <div className="month-insights-left">
+        {currentMonthYearTitle && typeof currentMonthTotalBrl === "number" ? (
+          <div className="month-current-summary">
+            <span className="subtle">Dados das vendas do mes corrente · {currentMonthYearTitle}</span>
+            <strong>{formatCurrency(currentMonthTotalBrl, "BRL")}</strong>
+            <span className="subtle">Soma de recebido, a receber e em atraso no mes (BRL)</span>
+          </div>
+        ) : null}
+
         <div className="month-filter-row">
           <div className="field month-field">
             <label htmlFor="dashboard-month">Mes</label>
