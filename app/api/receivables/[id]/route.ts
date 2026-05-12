@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { fallbackBranchDefinition, resolveBranchDefinition } from "@/lib/branches";
 
 function supabaseUrl() {
   return (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").replace(/\/$/, "").replace(/\/rest\/v1$/i, "");
@@ -192,7 +193,11 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       }
     }
 
+    const branch = resolveBranchDefinition(row.branch_code ?? row.branch_name) ?? fallbackBranchDefinition();
+
     return NextResponse.json({
+      branchCode: branch.code,
+      branchLabel: branch.label,
       id: String(row.id),
       customerName: String(row.customer_name ?? ""),
       description: row.description ? String(row.description) : undefined,

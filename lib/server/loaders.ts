@@ -1,4 +1,5 @@
 import type { Account, Installment, LookupOption, Payable, Receivable, Supplier } from "@/lib/types";
+import { fallbackBranchDefinition, resolveBranchDefinition } from "@/lib/branches";
 import { buildDailyCashFlow, buildDashboardData, buildDashboardMonthlyBreakdown, buildReportsData } from "@/lib/server/finance";
 import { companyIdFromEnv, readCurrency, readFirstString, readNumber, supabaseSelect, toIsoDate, type SupabaseRow } from "@/lib/server/supabase-admin";
 
@@ -64,20 +65,26 @@ export async function listPasseiosServer(): Promise<LookupOption[]> {
 
 export async function listReceivablesServer(): Promise<Receivable[]> {
   const rows = await supabaseSelect<SupabaseRow>(withCompanyFilter("receivables?select=*&order=created_at.desc"));
-  return rows.map((row) => ({
-    id: readFirstString(row, ["id"]),
-    customerName: readFirstString(row, ["customer_name"]),
-    sellerId: readFirstString(row, ["seller_id"]) || undefined,
-    sellerName: readFirstString(row, ["seller_name"]) || undefined,
-    saleCode: readFirstString(row, ["sale_code"]) || undefined,
-    saleNumber: readNumber(row, ["sale_number"]) || undefined,
-    description: readFirstString(row, ["description"]) || undefined,
-    totalAmount: readNumber(row, ["total_amount"]),
-    currency: readCurrency(row, ["currency"]),
-    saleDate: toIsoDate(row.sale_date),
-    installmentsCount: readNumber(row, ["installments_count"]),
-    status: (readFirstString(row, ["status"]) || "OPEN") as Receivable["status"]
-  }));
+  return rows.map((row) => {
+    const branch = resolveBranchDefinition(row.branch_code ?? row.branch_name) ?? fallbackBranchDefinition();
+
+    return {
+      id: readFirstString(row, ["id"]),
+      branchCode: branch.code,
+      branchLabel: branch.label,
+      customerName: readFirstString(row, ["customer_name"]),
+      sellerId: readFirstString(row, ["seller_id"]) || undefined,
+      sellerName: readFirstString(row, ["seller_name"]) || undefined,
+      saleCode: readFirstString(row, ["sale_code"]) || undefined,
+      saleNumber: readNumber(row, ["sale_number"]) || undefined,
+      description: readFirstString(row, ["description"]) || undefined,
+      totalAmount: readNumber(row, ["total_amount"]),
+      currency: readCurrency(row, ["currency"]),
+      saleDate: toIsoDate(row.sale_date),
+      installmentsCount: readNumber(row, ["installments_count"]),
+      status: (readFirstString(row, ["status"]) || "OPEN") as Receivable["status"]
+    };
+  });
 }
 
 export async function listInstallmentsServer(): Promise<Installment[]> {

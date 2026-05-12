@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { createReceivable, listAccounts, listEmployees, listFornecedores, listMeiosPagamento, listPasseios } from "../lib/api-client";
 import { FornecedorCreateModal } from "@/components/fornecedor-create-modal";
 import { SaleItemRow } from "@/components/sale-item-row";
+import { BRANCHES, type BranchCode } from "@/lib/branches";
 import type { Account, Currency, InstallmentInput, LookupOption, Receivable, SaleItem } from "@/lib/types";
 
 type MeioPagamento = LookupOption & { tipo: string; contaRecebimento?: string };
@@ -110,6 +111,7 @@ export function ReceivableCreateForm({ onCreated }: ReceivableCreateFormProps) {
   const [isPending, startTransition] = useTransition();
   const [feedback, setFeedback] = useState<string>("");
   const [currency, setCurrency] = useState<Currency>("USD");
+  const [branchCode, setBranchCode] = useState<BranchCode>("CANCUN");
   const [sellers, setSellers] = useState<LookupOption[]>([]);
   const [passeios, setPasseios] = useState<LookupOption[]>([]);
   const [fornecedores, setFornecedores] = useState<LookupOption[]>([]);
@@ -296,6 +298,7 @@ const [meiosPagamento, setMeiosPagamento] = useState<MeioPagamento[]>([]);
   function resetForm(form: HTMLFormElement) {
     form.reset();
     setCurrency("USD");
+    setBranchCode("CANCUN");
     setInstallmentsCount(1);
     setInstallmentInputs([emptyInstallmentInput()]);
     setGlobalMeioId("");
@@ -327,6 +330,11 @@ const [meiosPagamento, setMeiosPagamento] = useState<MeioPagamento[]>([]);
         const fxRateUsdBrl = fxRateRaw ? Number(fxRateRaw) : undefined;
         const saleDate = String(formData.get("saleDate") ?? "").trim();
         const customerName = String(formData.get("customerName") ?? "").trim();
+        const selectedBranchCode = String(formData.get("branchCode") ?? "").trim() as BranchCode;
+
+        if (selectedBranchCode !== "CANCUN" && selectedBranchCode !== "PUNTA_CANA") {
+          throw new Error("Selecione a filial da venda.");
+        }
 
         if (totalVenda <= 0) throw new Error("O total da venda deve ser maior que zero.");
 
@@ -341,6 +349,7 @@ const [meiosPagamento, setMeiosPagamento] = useState<MeioPagamento[]>([]);
           const cashReceiver = globalMeioTipo === "AO FUNCIONARIO" ? sellers.find((s) => s.id === cashReceiverId) : undefined;
 
           const created = await createReceivable({
+            branchCode: selectedBranchCode,
             customerName,
             sellerId,
             sellerName: seller.name,
@@ -372,6 +381,7 @@ const [meiosPagamento, setMeiosPagamento] = useState<MeioPagamento[]>([]);
           }
 
           const created = await createReceivable({
+            branchCode: selectedBranchCode,
             customerName,
             sellerId,
             sellerName: seller.name,
@@ -411,6 +421,23 @@ const [meiosPagamento, setMeiosPagamento] = useState<MeioPagamento[]>([]);
           {/* â”€â”€ SEÃ‡ÃƒO 1: Dados da venda â”€â”€ */}
           <div className="field full" style={{ borderBottom: "1px solid var(--line)", paddingBottom: 6, marginBottom: 2 }}>
             <strong>Dados da venda</strong>
+          </div>
+
+          <div className="field">
+            <label htmlFor="rec-branch">Filial</label>
+            <select
+              id="rec-branch"
+              name="branchCode"
+              value={branchCode}
+              onChange={(e) => setBranchCode(e.target.value as BranchCode)}
+              required
+            >
+              {BRANCHES.map((branch) => (
+                <option key={branch.code} value={branch.code}>
+                  {branch.label}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div className="field">

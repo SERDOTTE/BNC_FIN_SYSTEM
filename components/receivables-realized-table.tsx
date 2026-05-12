@@ -296,6 +296,7 @@ export function ReceivablesRealizedTable({ receivables, installments }: Receivab
                 <thead>
                   <tr>
                     <th>Cliente</th>
+                    <th>Filial</th>
                     <th>Código</th>
                     <th>Venda</th>
                     <th>Total</th>
@@ -313,6 +314,9 @@ export function ReceivablesRealizedTable({ receivables, installments }: Receivab
                           <span className="subtle inline-subtle">
                             {receivable.sellerName ?? "Sem vendedor"} · {receivable.installmentsCount} parcelas
                           </span>
+                        </td>
+                        <td>
+                          <strong>{receivable.branchLabel}</strong>
                         </td>
                         <td>
                           <strong>{receivable.saleCode ?? "--"}</strong>

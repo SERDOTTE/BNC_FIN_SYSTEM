@@ -1,4 +1,5 @@
 export type Currency = "BRL" | "USD" | "EUR" | "ARS";
+export type BranchCode = "CANCUN" | "PUNTA_CANA";
 
 export type LookupOption = {
   id: string;
@@ -20,6 +21,8 @@ export type Supplier = {
 
 export type Receivable = {
   id: string;
+  branchCode: BranchCode;
+  branchLabel: string;
   customerName: string;
   sellerId?: string;
   sellerName?: string;
@@ -197,6 +200,7 @@ export type InstallmentInput = {
 };
 
 export type CreateReceivableRequest = {
+  branchCode: BranchCode;
   customerName: string;
   sellerId: string;
   sellerName: string;

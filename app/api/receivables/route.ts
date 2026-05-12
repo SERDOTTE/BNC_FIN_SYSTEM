@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { fallbackBranchDefinition, resolveBranchDefinition } from "@/lib/branches";
 
 type SaleItemBody = {
   passeioId: string;
@@ -14,6 +15,7 @@ type SaleItemBody = {
 };
 
 type CreateReceivableBody = {
+  branchCode?: string;
   customerName: string;
   sellerId?: string;
   sellerName?: string;
@@ -142,9 +144,9 @@ function parseSaleNumberFromUnknown(value: unknown) {
   return 0;
 }
 
-async function generateNextSaleSequence(companyId: string) {
+async function generateNextSaleSequence(companyId: string, branchCode: string, branchPrefix: string) {
   const rows = await supabaseSelect<SupabaseRow>(
-    `receivables?select=sale_number,sale_code&company_id=eq.${encodeURIComponent(companyId)}&order=created_at.desc&limit=500`
+    `receivables?select=sale_number,sale_code&company_id=eq.${encodeURIComponent(companyId)}&branch_code=eq.${encodeURIComponent(branchCode)}&order=created_at.desc&limit=500`
   );
 
   const highest = rows.reduce((max, row) => {
@@ -157,7 +159,7 @@ async function generateNextSaleSequence(companyId: string) {
 
   return {
     saleNumber: nextSaleNumber,
-    saleCode: buildSaleCode(nextSaleNumber)
+    saleCode: `${branchPrefix}.${buildSaleCode(nextSaleNumber)}`
   };
 }
 
@@ -199,20 +201,26 @@ export async function GET() {
 
     const rows = (await response.json()) as SupabaseRow[];
     return NextResponse.json(
-      rows.map((row) => ({
-        id: String(row.id ?? ""),
-        customerName: String(row.customer_name ?? ""),
-        sellerId: row.seller_id ? String(row.seller_id) : undefined,
-        sellerName: row.seller_name ? String(row.seller_name) : undefined,
-        saleCode: row.sale_code ? String(row.sale_code) : undefined,
-        saleNumber: row.sale_number != null ? Number(row.sale_number) : undefined,
-        description: row.description ? String(row.description) : undefined,
-        totalAmount: Number(row.total_amount ?? 0),
-        currency: String(row.currency ?? "BRL"),
-        saleDate: String(row.sale_date ?? "").slice(0, 10),
-        installmentsCount: Number(row.installments_count ?? 0),
-        status: String(row.status ?? "OPEN")
-      }))
+      rows.map((row) => {
+        const branch = resolveBranchDefinition(row.branch_code ?? row.branch_name) ?? fallbackBranchDefinition();
+
+        return {
+          id: String(row.id ?? ""),
+          branchCode: branch.code,
+          branchLabel: branch.label,
+          customerName: String(row.customer_name ?? ""),
+          sellerId: row.seller_id ? String(row.seller_id) : undefined,
+          sellerName: row.seller_name ? String(row.seller_name) : undefined,
+          saleCode: row.sale_code ? String(row.sale_code) : undefined,
+          saleNumber: row.sale_number != null ? Number(row.sale_number) : undefined,
+          description: row.description ? String(row.description) : undefined,
+          totalAmount: Number(row.total_amount ?? 0),
+          currency: String(row.currency ?? "BRL"),
+          saleDate: String(row.sale_date ?? "").slice(0, 10),
+          installmentsCount: Number(row.installments_count ?? 0),
+          status: String(row.status ?? "OPEN")
+        };
+      })
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : "Erro ao listar recebíveis.";
@@ -277,9 +285,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Campos obrigatórios ausentes." }, { status: 400 });
   }
 
+  const branch = resolveBranchDefinition(payload.branchCode);
+  if (!branch) {
+    return NextResponse.json({ error: "Filial inválida. Use CANCUN ou PUNTA_CANA." }, { status: 400 });
+  }
+
   try {
     const companyId = await fetchOrCreateCompanyId();
-    const { saleNumber, saleCode } = await generateNextSaleSequence(companyId);
+    const { saleNumber, saleCode } = await generateNextSaleSequence(companyId, branch.code, branch.prefix);
 
     const adultosTotais = (payload.items ?? []).reduce((s, i) => s + (i.adultos ?? 0), 0);
     const criancasTotais = (payload.items ?? []).reduce((s, i) => s + (i.criancas ?? 0), 0);
@@ -296,6 +309,8 @@ export async function POST(request: NextRequest) {
       total_amount: payload.totalAmount,
       currency: payload.currency,
       sale_date: payload.saleDate,
+      branch_code: branch.code,
+      branch_name: branch.label,
       sale_number: saleNumber,
       sale_code: saleCode,
       installments_count: payload.installmentsCount,
@@ -355,6 +370,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       id: receivableRow.id,
+      branchCode: branch.code,
+      branchLabel: branch.label,
       customerName: payload.customerName,
       sellerId: payload.sellerId ?? "",
       sellerName: payload.sellerName ?? "",
