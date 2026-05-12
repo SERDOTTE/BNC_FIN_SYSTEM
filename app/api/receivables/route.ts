@@ -27,6 +27,7 @@ type CreateReceivableBody = {
   saleCode?: string;
   saleNumber?: number;
   installmentDueDates?: string[];
+  installmentAmounts?: number[];
   meioPagamentoId?: string;
   meioPagamentoNome?: string;
   meioPagamentoTipo?: string;
@@ -318,7 +319,7 @@ export async function POST(request: NextRequest) {
     for (let i = 0; i < payload.installmentsCount; i++) {
       const dueDate = payload.installmentDueDates?.[i] ?? payload.saleDate;
       const isLast = i === payload.installmentsCount - 1;
-      const installmentAmount = isLast ? remainder : baseAmount;
+      const installmentAmount = payload.installmentAmounts?.[i] ?? (isLast ? remainder : baseAmount);
 
       await supabaseInsert("receivable_installments", {
         company_id: companyId,

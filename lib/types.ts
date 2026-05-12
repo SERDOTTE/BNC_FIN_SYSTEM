@@ -186,6 +186,7 @@ export type SaleItem = {
 
 export type InstallmentInput = {
   dueDate: string;
+  amountOverride?: string;
   meioPagamentoId: string;
   meioPagamentoNome: string;
   meioPagamentoTipo: string;
@@ -210,6 +211,7 @@ export type CreateReceivableRequest = {
   saleNumber?: number;
   installmentCodes?: string[];
   installmentDueDates?: string[];
+  installmentAmounts?: number[];
   installmentInputs?: InstallmentInput[];
   meioPagamentoId?: string;
   meioPagamentoNome?: string;

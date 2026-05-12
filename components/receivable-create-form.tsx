@@ -32,6 +32,7 @@ function emptyItem(currency: Currency): SaleItem {
 function emptyInstallmentInput(): InstallmentInput {
   return {
     dueDate: "",
+    amountOverride: "",
     meioPagamentoId: "",
     meioPagamentoNome: "",
     meioPagamentoTipo: "",
@@ -40,6 +41,44 @@ function emptyInstallmentInput(): InstallmentInput {
     cashReceiverId: "",
     cashReceiverName: "",
   };
+}
+
+/**
+ * Computes per-installment amounts.
+ * If an installment has a manual override, it is locked.
+ * The balance after the last override is split evenly across subsequent installments,
+ * with the final installment absorbing any rounding cent.
+ */
+function computeInstallmentAmounts(total: number, count: number, overrides: (string | undefined)[]): number[] {
+  if (count <= 0) return [];
+
+  let lastOverrideIdx = -1;
+  for (let i = 0; i < count; i++) {
+    if (overrides[i] !== undefined && overrides[i] !== "") lastOverrideIdx = i;
+  }
+
+  const amounts: number[] = new Array(count).fill(0);
+  let sumOverridden = 0;
+
+  for (let i = 0; i <= lastOverrideIdx; i++) {
+    const val = Number(overrides[i] ?? 0) || 0;
+    amounts[i] = val;
+    sumOverridden += val;
+  }
+
+  const remaining = Math.max(0, Math.round((total - sumOverridden) * 100) / 100);
+  const remainingCount = count - (lastOverrideIdx + 1);
+
+  if (remainingCount <= 0) return amounts;
+
+  const base = Math.floor((remaining / remainingCount) * 100) / 100;
+  const last = Math.round((remaining - base * (remainingCount - 1)) * 100) / 100;
+
+  for (let i = lastOverrideIdx + 1; i < count; i++) {
+    amounts[i] = i === count - 1 ? last : base;
+  }
+
+  return amounts;
 }
 
 function addMonthsKeepingDay(isoDate: string, monthsToAdd: number) {
@@ -187,6 +226,15 @@ const [meiosPagamento, setMeiosPagamento] = useState<MeioPagamento[]>([]);
     [items]
   );
 
+  const installmentAmounts = useMemo(
+    () => computeInstallmentAmounts(
+      totalVenda,
+      installmentsCount,
+      installmentInputs.map((inp) => inp.amountOverride)
+    ),
+    [totalVenda, installmentsCount, installmentInputs]
+  );
+
   function updateInstallmentInput(index: number, patch: Partial<InstallmentInput>) {
     setInstallmentInputs((cur) =>
       cur.map((item, i) => (i === index ? { ...item, ...patch } : item))
@@ -303,6 +351,7 @@ const [meiosPagamento, setMeiosPagamento] = useState<MeioPagamento[]>([]);
             installmentsCount: 1,
             items,
             installmentDueDates: [dueDate],
+            installmentAmounts: [totalVenda],
             meioPagamentoId: meio?.id,
             meioPagamentoNome: meio?.name,
             meioPagamentoTipo: meio?.tipo,
@@ -333,6 +382,7 @@ const [meiosPagamento, setMeiosPagamento] = useState<MeioPagamento[]>([]);
             installmentsCount,
             items,
             installmentDueDates: installmentInputs.map((inp) => inp.dueDate),
+            installmentAmounts,
             installmentInputs,
           });
 
@@ -527,6 +577,20 @@ const [meiosPagamento, setMeiosPagamento] = useState<MeioPagamento[]>([]);
                 </select>
               </div>
 
+              <div className="field">
+                <label htmlFor="rec-amount-1">Valor da parcela ({currency})</label>
+                <input
+                  id="rec-amount-1"
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  readOnly
+                  value={totalVenda > 0 ? totalVenda.toFixed(2) : ""}
+                  placeholder={totalVenda > 0 ? totalVenda.toFixed(2) : "Calculado automaticamente"}
+                  style={{ background: "rgba(15,43,69,0.04)", cursor: "default" }}
+                />
+              </div>
+
               {globalMeioTipo === "AO FUNCIONARIO" && (
                 <div className="field">
                   <label htmlFor="rec-cash-receiver">Funcionário que receberá</label>
@@ -621,6 +685,27 @@ const [meiosPagamento, setMeiosPagamento] = useState<MeioPagamento[]>([]);
                         <option key={a.id} value={a.id}>{a.name} ({a.baseCurrency})</option>
                       ))}
                     </select>
+                  </div>
+
+                  <div className="field" style={{ margin: 0 }}>
+                    <label htmlFor={`rec-amount-${idx + 1}`}>
+                      Valor ({currency})
+                      {!inp.amountOverride && (
+                        <span className="subtle" style={{ fontSize: "0.78rem", marginLeft: 6 }}>opcional</span>
+                      )}
+                    </label>
+                    <input
+                      id={`rec-amount-${idx + 1}`}
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      placeholder={installmentAmounts[idx]?.toFixed(2) ?? ""}
+                      value={inp.amountOverride ?? ""}
+                      onChange={(e) => updateInstallmentInput(idx, { amountOverride: e.target.value })}
+                    />
+                    <span className="subtle" style={{ fontSize: "0.78rem" }}>
+                      Calculado: {currency} {(installmentAmounts[idx] ?? 0).toFixed(2)}
+                    </span>
                   </div>
 
                   {inp.meioPagamentoTipo === "AO FUNCIONARIO" && (
