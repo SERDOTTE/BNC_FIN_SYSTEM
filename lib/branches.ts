@@ -34,3 +34,7 @@ export function resolveBranchDefinition(value: unknown): BranchDefinition | null
 export function fallbackBranchDefinition(): BranchDefinition {
   return BRANCH_MAP.CANCUN;
 }
+
+export function formatBranchLabel(code: BranchCode) {
+  return BRANCH_MAP[code].label;
+}

@@ -7,7 +7,7 @@ import { createReceivable, listAccounts, listEmployees, listFornecedores, listMe
 import { FornecedorCreateModal } from "@/components/fornecedor-create-modal";
 import { SaleItemRow } from "@/components/sale-item-row";
 import { BRANCHES, type BranchCode } from "@/lib/branches";
-import type { Account, Currency, InstallmentInput, LookupOption, Receivable, SaleItem } from "@/lib/types";
+import type { Account, Currency, InstallmentInput, LookupOption, PasseioOption, Receivable, SaleItem } from "@/lib/types";
 
 type MeioPagamento = LookupOption & { tipo: string; contaRecebimento?: string };
 
@@ -113,7 +113,7 @@ export function ReceivableCreateForm({ onCreated }: ReceivableCreateFormProps) {
   const [currency, setCurrency] = useState<Currency>("USD");
   const [branchCode, setBranchCode] = useState<BranchCode>("CANCUN");
   const [sellers, setSellers] = useState<LookupOption[]>([]);
-  const [passeios, setPasseios] = useState<LookupOption[]>([]);
+  const [passeios, setPasseios] = useState<PasseioOption[]>([]);
   const [fornecedores, setFornecedores] = useState<LookupOption[]>([]);
 const [meiosPagamento, setMeiosPagamento] = useState<MeioPagamento[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -135,11 +135,10 @@ const [meiosPagamento, setMeiosPagamento] = useState<MeioPagamento[]>([]);
 
   useEffect(() => {
     let active = true;
-    Promise.all([listEmployees(), listPasseios(), listFornecedores(), listMeiosPagamento(), listAccounts()])
-      .then(([emps, pass, forn, meios, accs]) => {
+    Promise.all([listEmployees(), listFornecedores(), listMeiosPagamento(), listAccounts()])
+      .then(([emps, forn, meios, accs]) => {
         if (!active) return;
         setSellers(emps);
-        setPasseios(pass);
         setFornecedores(forn);
         setMeiosPagamento(meios as MeioPagamento[]);
         setAccounts(accs);
@@ -148,6 +147,40 @@ const [meiosPagamento, setMeiosPagamento] = useState<MeioPagamento[]>([]);
       .catch(() => { if (active) setLoadingOptions(false); });
     return () => { active = false; };
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    setLoadingOptions(true);
+
+    listPasseios(branchCode)
+      .then((items) => {
+        if (!active) return;
+        setPasseios(items as PasseioOption[]);
+        setItems((current) =>
+          current.map((item) => ({
+            ...item,
+            passeioId: "",
+            passeioNome: "",
+            fornecedorId: "",
+            fornecedorNome: "",
+            custoUnitarioAdulto: 0,
+            custoUnitarioCrianca: 0,
+            totalItem: 0
+          }))
+        );
+        setLoadingOptions(false);
+      })
+      .catch(() => {
+        if (active) {
+          setPasseios([]);
+          setLoadingOptions(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [branchCode]);
 
   useEffect(() => {
     setInstallmentInputs((cur) =>
@@ -262,6 +295,37 @@ const [meiosPagamento, setMeiosPagamento] = useState<MeioPagamento[]>([]);
 
   function addItem() {
     setItems((cur) => [...cur, emptyItem(currency)]);
+  }
+
+  function hasConfiguredItems() {
+    return items.some(
+      (item) =>
+        !!item.passeioId ||
+        !!item.fornecedorId ||
+        item.adultos > 0 ||
+        item.criancas > 0 ||
+        item.custoUnitarioAdulto > 0 ||
+        item.custoUnitarioCrianca > 0 ||
+        item.totalItem > 0
+    );
+  }
+
+  function handleBranchChange(nextBranchCode: BranchCode) {
+    if (nextBranchCode === branchCode) {
+      return;
+    }
+
+    if (hasConfiguredItems()) {
+      const confirmed = window.confirm(
+        "Trocar a filial vai limpar os passeios e valores já selecionados nesta venda. Deseja continuar?"
+      );
+
+      if (!confirmed) {
+        return;
+      }
+    }
+
+    setBranchCode(nextBranchCode);
   }
 
   function openFornecedorModal() {
@@ -429,7 +493,7 @@ const [meiosPagamento, setMeiosPagamento] = useState<MeioPagamento[]>([]);
               id="rec-branch"
               name="branchCode"
               value={branchCode}
-              onChange={(e) => setBranchCode(e.target.value as BranchCode)}
+              onChange={(e) => handleBranchChange(e.target.value as BranchCode)}
               required
             >
               {BRANCHES.map((branch) => (
@@ -438,6 +502,9 @@ const [meiosPagamento, setMeiosPagamento] = useState<MeioPagamento[]>([]);
                 </option>
               ))}
             </select>
+            <span className="subtle" style={{ fontSize: "0.78rem" }}>
+              Os passeios são carregados conforme a filial selecionada.
+            </span>
           </div>
 
           <div className="field">

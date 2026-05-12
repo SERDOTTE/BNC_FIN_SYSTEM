@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 
 import { getDashboardMonthlyBreakdown } from "@/lib/api-client";
 import { formatCurrency, formatDate, installmentStatusLabel, resolveInstallmentStatus, installmentStatusTone } from "@/lib/formatters";
-import type { DashboardMonthlyBreakdown, DashboardMonthlyInstallmentDetail, DashboardMonthlySaleDetail } from "@/lib/types";
+import type { DashboardBranchMonthlySummary, DashboardMonthlyBreakdown, DashboardMonthlyInstallmentDetail, DashboardMonthlySaleDetail } from "@/lib/types";
 
 type DashboardMonthInsightsProps = {
   initialMonth: number;
@@ -12,6 +12,7 @@ type DashboardMonthInsightsProps = {
   initialData: DashboardMonthlyBreakdown;
   currentMonthYearTitle?: string;
   currentMonthTotalBrl?: number;
+  branchSummaries?: DashboardBranchMonthlySummary[];
 };
 
 type DetailModal = "received" | "toReceive" | "overdue" | "sales" | null;
@@ -79,7 +80,8 @@ export function DashboardMonthInsights({
   initialYear,
   initialData,
   currentMonthYearTitle,
-  currentMonthTotalBrl
+  currentMonthTotalBrl,
+  branchSummaries = []
 }: DashboardMonthInsightsProps) {
   const [month, setMonth] = useState(initialMonth);
   const [year, setYear] = useState(initialYear);
@@ -256,6 +258,13 @@ export function DashboardMonthInsights({
     );
   }
 
+  const currentMonthBranchTotals = branchSummaries
+    .map((branch) => ({
+      ...branch,
+      currentMonthValueBrl: branch.monthReceivedBrl + branch.monthToReceiveBrl + branch.monthOverdueBrl
+    }))
+    .filter((branch) => branch.currentMonthValueBrl > 0);
+
   return (
     <div className="month-insights-wrap">
       <div className="month-insights-left">
@@ -264,6 +273,15 @@ export function DashboardMonthInsights({
             <span className="subtle">Dados das vendas do mes corrente · {currentMonthYearTitle}</span>
             <strong>{formatCurrency(currentMonthTotalBrl, "BRL")}</strong>
             <span className="subtle">Soma de recebido, a receber e em atraso no mes (BRL)</span>
+            {currentMonthBranchTotals.length ? (
+              <div className="month-branch-breakdown">
+                {currentMonthBranchTotals.map((branch) => (
+                  <span key={branch.branchCode} className="subtle">
+                    {branch.branchLabel}: {formatCurrency(branch.currentMonthValueBrl, "BRL")}
+                  </span>
+                ))}
+              </div>
+            ) : null}
           </div>
         ) : null}
 
@@ -329,6 +347,16 @@ export function DashboardMonthInsights({
             <span>{formatCurrency(data.projectedReceiptsMonthBrl, "BRL")}</span>
           </div>
         </div>
+
+        {data.branchSummaries.length ? (
+          <div className="month-branch-breakdown month-branch-breakdown-sales">
+            {data.branchSummaries.map((branch) => (
+              <div key={branch.branchCode} className="subtle month-branch-line">
+                {branch.branchLabel}: {branch.salesCount} vendas · {formatCurrency(branch.totalSalesBrl, "BRL")}
+              </div>
+            ))}
+          </div>
+        ) : null}
       </aside>
 
       {isPending ? <p className="subtle">Atualizando composicao mensal...</p> : null}

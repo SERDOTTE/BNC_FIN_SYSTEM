@@ -40,6 +40,7 @@ export default async function HomePage() {
             initialData={monthlyBreakdown}
             currentMonthYearTitle={currentMonthYearTitle}
             currentMonthTotalBrl={dashboard.monthReceived + dashboard.monthToReceive + dashboard.monthOverdue}
+            branchSummaries={monthlyBreakdown.branchSummaries}
           />
         </div>
       </section>

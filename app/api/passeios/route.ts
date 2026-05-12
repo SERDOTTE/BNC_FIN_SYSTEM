@@ -1,19 +1,28 @@
 ﻿import { NextRequest, NextResponse } from "next/server";
 
 import { companyIdFromEnv, readFirstString, serviceRoleKey, supabaseFetch, supabaseSelect, type SupabaseRow } from "@/lib/server/supabase-admin";
+import { fallbackBranchDefinition, resolveBranchDefinition } from "@/lib/branches";
 
 function mapPasseio(row: SupabaseRow) {
+  const branch = resolveBranchDefinition(row.branch_code ?? row.branch_name) ?? fallbackBranchDefinition();
   return {
     id: readFirstString(row, ["id_passeio", "id"]),
-    name: readFirstString(row, ["nome_passeio", "nome", "name"])
+    name: readFirstString(row, ["nome_passeio", "nome", "name"]),
+    branchCode: branch.code,
+    branchLabel: branch.label
   };
 }
 
-async function listPasseiosRows(companyId: string) {
+async function listPasseiosRows(companyId: string, branchCode?: string) {
   const companyFilter = companyId ? `&company_id=eq.${encodeURIComponent(companyId)}` : "";
+  const branchFilter = branchCode ? `&branch_code=eq.${encodeURIComponent(branchCode)}` : "";
   const queries = [
+    `passeios?select=*&order=nome_passeio.asc${companyFilter}${branchFilter}`,
+    `passeios?select=*&order=nome.asc${companyFilter}${branchFilter}`,
     `passeios?select=*&order=nome_passeio.asc${companyFilter}`,
     `passeios?select=*&order=nome.asc${companyFilter}`,
+    `passeios?select=*&order=nome_passeio.asc${branchFilter}`,
+    `passeios?select=*&order=nome.asc${branchFilter}`,
     "passeios?select=*&order=nome_passeio.asc",
     "passeios?select=*&order=nome.asc"
   ];
@@ -29,7 +38,7 @@ async function listPasseiosRows(companyId: string) {
   throw new Error("Nenhuma consulta de passeios funcionou no Supabase.");
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const key = serviceRoleKey();
 
   if (!key) {
@@ -37,7 +46,8 @@ export async function GET() {
   }
 
   try {
-    const rows = await listPasseiosRows(companyIdFromEnv());
+    const branchCode = request.nextUrl.searchParams.get("branchCode") ?? request.nextUrl.searchParams.get("branch_code") ?? undefined;
+    const rows = await listPasseiosRows(companyIdFromEnv(), branchCode);
     const items = rows.map(mapPasseio).filter((item) => item.id && item.name);
     return NextResponse.json(items);
   } catch (error) {
@@ -54,10 +64,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Supabase não configurado." }, { status: 503 });
   }
 
-  const body = (await request.json()) as { nome?: string; fornecedorId?: string; moedaCusto?: string };
+  const body = (await request.json()) as { nome?: string; fornecedorId?: string; moedaCusto?: string; branchCode?: string };
   const nome = (body.nome ?? "").trim();
   const fornecedorId = (body.fornecedorId ?? "").trim();
   const moedaCusto = (body.moedaCusto ?? "USD").trim().toUpperCase();
+  const branch = resolveBranchDefinition(body.branchCode) ?? fallbackBranchDefinition();
   const ownerId = companyId || fornecedorId || "";
 
   if (!nome) {
@@ -67,23 +78,27 @@ export async function POST(request: NextRequest) {
   const payloadNomePasseio: Record<string, unknown> = {
     nome_passeio: nome,
     id_fornecedor: ownerId || null,
-    moeda_custo: moedaCusto || "USD"
+    moeda_custo: moedaCusto || "USD",
+    branch_code: branch.code,
+    branch_name: branch.label
   };
   const payloadNome: Record<string, unknown> = {
     nome,
     id_fornecedor: ownerId || null,
-    moeda_custo: moedaCusto || "USD"
+    moeda_custo: moedaCusto || "USD",
+    branch_code: branch.code,
+    branch_name: branch.label
   };
 
   const attempts: Record<string, unknown>[] = [
     payloadNomePasseio,
     payloadNome,
-    { nome_passeio: nome, id_fornecedor: ownerId || null },
-    { nome: nome, id_fornecedor: ownerId || null },
-    { nome_passeio: nome, moeda_custo: moedaCusto || "USD" },
-    { nome: nome, moeda_custo: moedaCusto || "USD" },
-    { nome_passeio: nome },
-    { nome }
+    { nome_passeio: nome, id_fornecedor: ownerId || null, branch_code: branch.code, branch_name: branch.label },
+    { nome: nome, id_fornecedor: ownerId || null, branch_code: branch.code, branch_name: branch.label },
+    { nome_passeio: nome, moeda_custo: moedaCusto || "USD", branch_code: branch.code, branch_name: branch.label },
+    { nome: nome, moeda_custo: moedaCusto || "USD", branch_code: branch.code, branch_name: branch.label },
+    { nome_passeio: nome, branch_code: branch.code, branch_name: branch.label },
+    { nome, branch_code: branch.code, branch_name: branch.label }
   ];
 
   let lastError = "";
@@ -105,7 +120,7 @@ export async function POST(request: NextRequest) {
     const rows = (await response.json()) as SupabaseRow[];
     const item = mapPasseio(rows[0] ?? payload);
     if (!item.id || !item.name) {
-      return NextResponse.json({ id: "", name: nome }, { status: 201 });
+      return NextResponse.json({ id: "", name: nome, branchCode: branch.code, branchLabel: branch.label }, { status: 201 });
     }
 
     return NextResponse.json(item, { status: 201 });

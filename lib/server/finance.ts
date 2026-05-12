@@ -3,11 +3,13 @@ import type {
   DailyFlowInflowDetail,
   DailyFlowPoint,
   DashboardData,
+  DashboardBranchMonthlySummary,
   DashboardMonthlyBreakdown,
   DashboardMonthlyInstallmentDetail,
   DashboardMonthlySaleDetail,
   ReportsData
 } from "@/lib/types";
+import { fallbackBranchDefinition, resolveBranchDefinition } from "@/lib/branches";
 import {
   companyIdFromEnv,
   readCurrency,
@@ -21,6 +23,8 @@ import {
 type InstallmentRow = SupabaseRow & {
   receivables?: SupabaseRow | null;
 };
+
+type BranchSummaryMap = Map<string, DashboardBranchMonthlySummary>;
 
 type FlowBucket = {
   inflow: number;
@@ -125,6 +129,32 @@ function readReceivableTotalBrl(receivable: SupabaseRow, installments: Installme
   return installments.reduce((sum, item) => sum + readInstallmentAmountBrl(item), 0);
 }
 
+function resolveBranchFromRow(row: SupabaseRow) {
+  return resolveBranchDefinition(row.branch_code ?? row.branch_name) ?? fallbackBranchDefinition();
+}
+
+function getBranchSummary(map: BranchSummaryMap, branchCode: string, branchLabel: string) {
+  const key = branchCode || branchLabel;
+  const existing = map.get(key);
+  if (existing) {
+    return existing;
+  }
+
+  const summary: DashboardBranchMonthlySummary = {
+    branchCode: (branchCode as DashboardBranchMonthlySummary["branchCode"]) || fallbackBranchDefinition().code,
+    branchLabel: branchLabel || fallbackBranchDefinition().label,
+    salesCount: 0,
+    totalSalesBrl: 0,
+    projectedReceiptsBrl: 0,
+    monthReceivedBrl: 0,
+    monthToReceiveBrl: 0,
+    monthOverdueBrl: 0
+  };
+
+  map.set(key, summary);
+  return summary;
+}
+
 export async function buildDashboardMonthlyBreakdown(month: number, year: number): Promise<DashboardMonthlyBreakdown> {
   const selectedMonthKey = toMonthKeyByNumber(month, year);
   const todayIso = formatDate(new Date());
@@ -139,6 +169,7 @@ export async function buildDashboardMonthlyBreakdown(month: number, year: number
   const installmentsReceived: DashboardMonthlyInstallmentDetail[] = [];
   const installmentsToReceive: DashboardMonthlyInstallmentDetail[] = [];
   const installmentsOverdue: DashboardMonthlyInstallmentDetail[] = [];
+  const branchSummaries = new Map<string, DashboardBranchMonthlySummary>();
 
   let monthReceived = 0;
   let monthToReceive = 0;
@@ -154,10 +185,14 @@ export async function buildDashboardMonthlyBreakdown(month: number, year: number
     const paymentMonthKey = paymentDate ? monthKey(paymentDate) : "";
     const amountBrl = readInstallmentAmountBrl(row);
     const receivable = (row.receivables as SupabaseRow | null) ?? {};
+    const branch = resolveBranchFromRow(receivable);
+    const branchSummary = getBranchSummary(branchSummaries, branch.code, branch.label);
 
     const detail: DashboardMonthlyInstallmentDetail = {
       installmentId: readFirstString(row, ["id"]),
       receivableId: readFirstString(row, ["receivable_id"]),
+      branchCode: branch.code,
+      branchLabel: branch.label,
       customerName: readFirstString(receivable, ["customer_name"]),
       saleCode: readFirstString(receivable, ["sale_code"]) || undefined,
       saleNumber: readNumber(receivable, ["sale_number"]) || undefined,
@@ -170,6 +205,7 @@ export async function buildDashboardMonthlyBreakdown(month: number, year: number
 
     if (status === "PAID" && paymentMonthKey === selectedMonthKey) {
       monthReceived += amountBrl;
+      branchSummary.monthReceivedBrl += amountBrl;
       installmentsReceived.push(detail);
       continue;
     }
@@ -177,9 +213,11 @@ export async function buildDashboardMonthlyBreakdown(month: number, year: number
     if (status !== "CANCELED" && status !== "PAID" && dueMonthKey === selectedMonthKey) {
       if (isLate) {
         monthOverdue += amountBrl;
+        branchSummary.monthOverdueBrl += amountBrl;
         installmentsOverdue.push(detail);
       } else {
         monthToReceive += amountBrl;
+        branchSummary.monthToReceiveBrl += amountBrl;
         installmentsToReceive.push(detail);
       }
     }
@@ -205,6 +243,9 @@ export async function buildDashboardMonthlyBreakdown(month: number, year: number
     if (status === "CANCELED") {
       continue;
     }
+
+    const branch = resolveBranchFromRow(row);
+    const branchSummary = getBranchSummary(branchSummaries, branch.code, branch.label);
 
     const allSaleInstallments = ((row.receivable_installments as InstallmentRow[] | undefined) ?? []);
     const saleInstallments = allSaleInstallments.filter(
@@ -234,6 +275,8 @@ export async function buildDashboardMonthlyBreakdown(month: number, year: number
 
     sales.push({
       receivableId: readFirstString(row, ["id"]),
+      branchCode: branch.code,
+      branchLabel: branch.label,
       customerName: readFirstString(row, ["customer_name"]),
       saleCode: readFirstString(row, ["sale_code"]) || undefined,
       saleNumber: readNumber(row, ["sale_number"]) || undefined,
@@ -246,12 +289,26 @@ export async function buildDashboardMonthlyBreakdown(month: number, year: number
       pendingBrl: Number(pendingBrl.toFixed(2)),
       overdueBrl: Number(overdueBrl.toFixed(2))
     });
+
+    branchSummary.salesCount += 1;
+    branchSummary.totalSalesBrl += Number(allSaleInstallments.reduce((sum, item) => sum + readInstallmentAmountBrl(item), 0).toFixed(2));
+    branchSummary.projectedReceiptsBrl += Number(projectedReceiptsBrl.toFixed(2));
   }
 
   sales.sort((left, right) => left.saleDate.localeCompare(right.saleDate));
 
   const totalSalesMonthBrl = sales.reduce((sum, item) => sum + item.totalSaleBrl, 0);
   const projectedReceiptsMonthBrl = sales.reduce((sum, item) => sum + item.projectedReceiptsBrl, 0);
+  const branchSummaryList = Array.from(branchSummaries.values())
+    .map((item) => ({
+      ...item,
+      totalSalesBrl: Number(item.totalSalesBrl.toFixed(2)),
+      projectedReceiptsBrl: Number(item.projectedReceiptsBrl.toFixed(2)),
+      monthReceivedBrl: Number(item.monthReceivedBrl.toFixed(2)),
+      monthToReceiveBrl: Number(item.monthToReceiveBrl.toFixed(2)),
+      monthOverdueBrl: Number(item.monthOverdueBrl.toFixed(2))
+    }))
+    .sort((left, right) => left.branchLabel.localeCompare(right.branchLabel));
 
   return {
     month,
@@ -265,6 +322,7 @@ export async function buildDashboardMonthlyBreakdown(month: number, year: number
     salesCount: sales.length,
     totalSalesMonthBrl: Number(totalSalesMonthBrl.toFixed(2)),
     projectedReceiptsMonthBrl: Number(projectedReceiptsMonthBrl.toFixed(2)),
+    branchSummaries: branchSummaryList,
     sales
   };
 }

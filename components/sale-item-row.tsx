@@ -3,11 +3,11 @@
 import { useEffect, useState } from "react";
 
 import { fetchPasseioFornecedorPreco } from "@/lib/api-client";
-import type { Currency, LookupOption, SaleItem } from "@/lib/types";
+import type { Currency, LookupOption, PasseioOption, SaleItem } from "@/lib/types";
 
 type Props = {
   index: number;
-  passeios: LookupOption[];
+  passeios: PasseioOption[];
   fornecedores: LookupOption[];
   currency: Currency;
   value: SaleItem;

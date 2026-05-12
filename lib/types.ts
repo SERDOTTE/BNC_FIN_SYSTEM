@@ -6,6 +6,11 @@ export type LookupOption = {
   name: string;
 };
 
+export type PasseioOption = LookupOption & {
+  branchCode: BranchCode;
+  branchLabel: string;
+};
+
 export type Account = {
   id: string;
   name: string;
@@ -108,6 +113,8 @@ export type DashboardData = {
 export type DashboardMonthlyInstallmentDetail = {
   installmentId: string;
   receivableId: string;
+  branchCode: BranchCode;
+  branchLabel: string;
   customerName: string;
   saleCode?: string;
   saleNumber?: number;
@@ -120,6 +127,8 @@ export type DashboardMonthlyInstallmentDetail = {
 
 export type DashboardMonthlySaleDetail = {
   receivableId: string;
+  branchCode: BranchCode;
+  branchLabel: string;
   customerName: string;
   saleCode?: string;
   saleNumber?: number;
@@ -131,6 +140,17 @@ export type DashboardMonthlySaleDetail = {
   receivedBrl: number;
   pendingBrl: number;
   overdueBrl: number;
+};
+
+export type DashboardBranchMonthlySummary = {
+  branchCode: BranchCode;
+  branchLabel: string;
+  salesCount: number;
+  totalSalesBrl: number;
+  projectedReceiptsBrl: number;
+  monthReceivedBrl: number;
+  monthToReceiveBrl: number;
+  monthOverdueBrl: number;
 };
 
 export type DashboardMonthlyBreakdown = {
@@ -145,6 +165,7 @@ export type DashboardMonthlyBreakdown = {
   salesCount: number;
   totalSalesMonthBrl: number;
   projectedReceiptsMonthBrl: number;
+  branchSummaries: DashboardBranchMonthlySummary[];
   sales: DashboardMonthlySaleDetail[];
 };
 

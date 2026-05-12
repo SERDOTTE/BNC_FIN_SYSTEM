@@ -1,9 +1,9 @@
 import { PageHeader } from "@/components/page-header";
 import { PasseiosSection } from "@/components/passeios-section";
 import { listPasseiosServer } from "@/lib/server/loaders";
-import type { LookupOption } from "@/lib/types";
+import type { PasseioOption } from "@/lib/types";
 
-async function loadPasseios(): Promise<LookupOption[]> {
+async function loadPasseios(): Promise<PasseioOption[]> {
   return listPasseiosServer();
 }
 

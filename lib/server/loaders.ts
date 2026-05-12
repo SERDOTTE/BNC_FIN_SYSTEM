@@ -1,4 +1,4 @@
-import type { Account, Installment, LookupOption, Payable, Receivable, Supplier } from "@/lib/types";
+import type { Account, Installment, LookupOption, Payable, PasseioOption, Receivable, Supplier } from "@/lib/types";
 import { fallbackBranchDefinition, resolveBranchDefinition } from "@/lib/branches";
 import { buildDailyCashFlow, buildDashboardData, buildDashboardMonthlyBreakdown, buildReportsData } from "@/lib/server/finance";
 import { companyIdFromEnv, readCurrency, readFirstString, readNumber, supabaseSelect, toIsoDate, type SupabaseRow } from "@/lib/server/supabase-admin";
@@ -38,7 +38,7 @@ export async function listFornecedoresServer(): Promise<Supplier[]> {
     .filter((item) => item.id && item.name);
 }
 
-export async function listPasseiosServer(): Promise<LookupOption[]> {
+export async function listPasseiosServer(): Promise<PasseioOption[]> {
   const queries = [
     withCompanyFilter("passeios?select=*&order=nome_passeio.asc"),
     withCompanyFilter("passeios?select=*&order=nome.asc"),
@@ -52,7 +52,9 @@ export async function listPasseiosServer(): Promise<LookupOption[]> {
       return rows
         .map((row) => ({
           id: readFirstString(row, ["id_passeio", "id"]),
-          name: readFirstString(row, ["nome_passeio", "nome", "name"])
+          name: readFirstString(row, ["nome_passeio", "nome", "name"]),
+          branchCode: (resolveBranchDefinition(row.branch_code ?? row.branch_name) ?? fallbackBranchDefinition()).code,
+          branchLabel: (resolveBranchDefinition(row.branch_code ?? row.branch_name) ?? fallbackBranchDefinition()).label
         }))
         .filter((item) => item.id && item.name);
     } catch {

@@ -4,19 +4,21 @@ import { FormEvent, useState, useTransition } from "react";
 
 import { createPasseio } from "@/lib/api-client";
 import { SectionCard } from "@/components/section-card";
-import type { LookupOption } from "@/lib/types";
+import { BRANCHES, type BranchCode } from "@/lib/branches";
+import type { PasseioOption } from "@/lib/types";
 
 type Props = {
-  initialPasseios: LookupOption[];
+  initialPasseios: PasseioOption[];
 };
 
 export function PasseiosSection({ initialPasseios }: Props) {
-  const [passeios, setPasseios] = useState<LookupOption[]>(initialPasseios);
+  const [passeios, setPasseios] = useState<PasseioOption[]>(initialPasseios);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editNome, setEditNome] = useState("");
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState("");
   const [error, setError] = useState("");
+  const [branchCode, setBranchCode] = useState<BranchCode>("CANCUN");
   const [isPending, startTransition] = useTransition();
 
   function handleCreate(event: FormEvent<HTMLFormElement>) {
@@ -24,6 +26,7 @@ export function PasseiosSection({ initialPasseios }: Props) {
     const form = event.currentTarget;
     const formData = new FormData(form);
     const nome = String(formData.get("nome") ?? "").trim();
+    const selectedBranchCode = String(formData.get("branchCode") ?? "").trim() as BranchCode;
 
     if (!nome) {
       setFeedback("");
@@ -31,13 +34,20 @@ export function PasseiosSection({ initialPasseios }: Props) {
       return;
     }
 
+    if (selectedBranchCode !== "CANCUN" && selectedBranchCode !== "PUNTA_CANA") {
+      setFeedback("");
+      setError("Selecione a filial do passeio.");
+      return;
+    }
+
     startTransition(async () => {
       try {
-        const created = await createPasseio({ nome });
+        const created = await createPasseio({ nome, branchCode: selectedBranchCode });
         setPasseios((prev) => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
         setFeedback(`Passeio "${created.name}" cadastrado.`);
         setError("");
         form.reset();
+        setBranchCode("CANCUN");
       } catch (err) {
         setFeedback("");
         setError(err instanceof Error ? err.message : "Erro ao criar passeio.");
@@ -45,7 +55,7 @@ export function PasseiosSection({ initialPasseios }: Props) {
     });
   }
 
-  function startEdit(item: LookupOption) {
+  function startEdit(item: PasseioOption) {
     setEditingId(item.id);
     setEditNome(item.name);
     setConfirmDeleteId(null);
@@ -80,7 +90,7 @@ export function PasseiosSection({ initialPasseios }: Props) {
           return;
         }
 
-        const updated = (await res.json()) as LookupOption;
+        const updated = (await res.json()) as PasseioOption;
         setPasseios((prev) =>
           prev.map((p) => (p.id === id ? updated : p)).sort((a, b) => a.name.localeCompare(b.name))
         );
@@ -146,6 +156,7 @@ export function PasseiosSection({ initialPasseios }: Props) {
         <table>
           <thead>
             <tr>
+              <th>Filial</th>
               <th>Passeio</th>
               <th></th>
             </tr>
@@ -154,6 +165,9 @@ export function PasseiosSection({ initialPasseios }: Props) {
             {passeios.map((item) =>
               editingId === item.id ? (
                 <tr key={item.id}>
+                  <td>
+                    <strong>{item.branchLabel ?? (item.branchCode === "PUNTA_CANA" ? "PUNTA CANA" : "CANCUN")}</strong>
+                  </td>
                   <td>
                     <input
                       value={editNome}
@@ -190,6 +204,9 @@ export function PasseiosSection({ initialPasseios }: Props) {
               ) : (
                 <tr key={item.id}>
                   <td>
+                    <strong>{item.branchLabel ?? (item.branchCode === "PUNTA_CANA" ? "PUNTA CANA" : "CANCUN")}</strong>
+                  </td>
+                  <td>
                     <strong>{item.name}</strong>
                   </td>
                   <td>
@@ -217,7 +234,7 @@ export function PasseiosSection({ initialPasseios }: Props) {
             )}
             {passeios.length === 0 && (
               <tr>
-                <td colSpan={2} style={{ textAlign: "center", color: "var(--muted)" }}>
+                <td colSpan={3} style={{ textAlign: "center", color: "var(--muted)" }}>
                   Nenhum passeio cadastrado.
                 </td>
               </tr>
@@ -231,6 +248,15 @@ export function PasseiosSection({ initialPasseios }: Props) {
         description="Adicione um novo passeio para uso nos itens das vendas."
       >
         <form className="form-grid" onSubmit={handleCreate}>
+          <div className="field full">
+            <label htmlFor="pas-filial">Filial</label>
+            <select id="pas-filial" name="branchCode" value={branchCode} onChange={(e) => setBranchCode(e.target.value as BranchCode)} required>
+              {BRANCHES.map((branch) => (
+                <option key={branch.code} value={branch.code}>{branch.label}</option>
+              ))}
+            </select>
+          </div>
+
           <div className="field full">
             <label htmlFor="pas-nome">Nome do passeio</label>
             <input id="pas-nome" name="nome" placeholder="Ex: Saona VIP" required />

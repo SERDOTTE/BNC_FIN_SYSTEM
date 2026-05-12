@@ -15,6 +15,7 @@ import type {
   Receivable,
   ReportsData
 } from "@/lib/types";
+import type { BranchCode } from "@/lib/branches";
 
 function makeIdempotencyKey(prefix: string) {
   const random = Math.random().toString(36).slice(2, 10);
@@ -90,12 +91,13 @@ export async function listSuppliers(): Promise<LookupOption[]> {
   return fetchRouteJson<LookupOption[]>("/api/fornecedores");
 }
 
-export async function listPasseios(): Promise<LookupOption[]> {
-  return fetchRouteJson<LookupOption[]>("/api/passeios");
+export async function listPasseios(branchCode?: BranchCode): Promise<Array<LookupOption & { branchCode?: BranchCode; branchLabel?: string }>> {
+  const query = branchCode ? `?branchCode=${encodeURIComponent(branchCode)}` : "";
+  return fetchRouteJson<Array<LookupOption & { branchCode?: BranchCode; branchLabel?: string }>>(`/api/passeios${query}`);
 }
 
-export async function createPasseio(payload: { nome: string; moedaCusto?: string }): Promise<LookupOption> {
-  return sendRouteJson<LookupOption, { nome: string; moedaCusto?: string }>("/api/passeios", "POST", payload);
+export async function createPasseio(payload: { nome: string; moedaCusto?: string; branchCode: BranchCode }): Promise<LookupOption & { branchCode: BranchCode; branchLabel: string }> {
+  return sendRouteJson<LookupOption & { branchCode: BranchCode; branchLabel: string }, { nome: string; moedaCusto?: string; branchCode: BranchCode }>("/api/passeios", "POST", payload);
 }
 
 export async function listFornecedores(): Promise<LookupOption[]> {

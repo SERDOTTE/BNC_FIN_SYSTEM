@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { fallbackBranchDefinition, resolveBranchDefinition } from "@/lib/branches";
 
 function supabaseUrl() {
   return (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").replace(/\/$/, "").replace(/\/rest\/v1$/i, "");
@@ -95,10 +96,13 @@ export async function PATCH(
 
     const rows = (await response.json()) as Array<Record<string, unknown>>;
     const row = rows[0] ?? payload;
+    const branch = resolveBranchDefinition(row.branch_code ?? row.branch_name) ?? fallbackBranchDefinition();
 
     return NextResponse.json({
       id: String(row.id_passeio ?? row.id ?? id),
-      name: String(row.nome_passeio ?? row.nome ?? nome)
+      name: String(row.nome_passeio ?? row.nome ?? nome),
+      branchCode: branch.code,
+      branchLabel: branch.label
     });
   }
 
