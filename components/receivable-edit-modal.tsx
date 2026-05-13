@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useState, useTransition } from "react";
 
-import { listAccounts, listEmployees, listMeiosPagamento, updateReceivable } from "../lib/api-client";
-import type { Account, Currency, InstallmentInput, Installment, LookupOption, Receivable } from "@/lib/types";
+import { listAccounts, listEmployees, listMeiosPagamento, listPasseios, updateReceivable } from "../lib/api-client";
+import { BRANCHES, type BranchCode } from "@/lib/branches";
+import type { Account, Currency, InstallmentInput, Installment, LookupOption, PasseioOption, Receivable, SaleItem } from "@/lib/types";
 
 type MeioPagamento = LookupOption & { tipo: string };
 
@@ -43,6 +44,7 @@ function installmentFromExisting(installment: Installment): InstallmentInput {
 export function ReceivableEditModal({ receivable, installments, onClose, onUpdated }: Props) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [submitAttempted, setSubmitAttempted] = useState(false);
 
   // Options
   const [sellers, setSellers] = useState<LookupOption[]>([]);
@@ -57,9 +59,12 @@ export function ReceivableEditModal({ receivable, installments, onClose, onUpdat
   const [saleDate, setSaleDate] = useState(receivable.saleDate);
   const [description, setDescription] = useState(receivable.description ?? "");
   const [currency, setCurrency] = useState<Currency>(receivable.currency);
+  const [branchCode, setBranchCode] = useState<BranchCode>(receivable.branchCode);
   const [totalAmount, setTotalAmount] = useState(String(receivable.totalAmount));
   const [fxRateUsdBrl, setFxRateUsdBrl] = useState("");
   const [installmentsCount, setInstallmentsCount] = useState(receivable.installmentsCount);
+  const [saleItems, setSaleItems] = useState<SaleItem[]>([]);
+  const [passeios, setPasseios] = useState<PasseioOption[]>([]);
 
   // Per-installment inputs – pre-fill from existing installments
   const sortedInstallments = useMemo(
@@ -82,17 +87,74 @@ export function ReceivableEditModal({ receivable, installments, onClose, onUpdat
 
   useEffect(() => {
     let active = true;
-    Promise.all([listEmployees(), listMeiosPagamento(), listAccounts()])
-      .then(([emps, meios, accs]) => {
+    Promise.all([listEmployees(), listMeiosPagamento(), listAccounts(), listPasseios(branchCode)])
+      .then(([emps, meios, accs, pass]) => {
         if (!active) return;
         setSellers(emps);
         setMeiosPagamento(meios as MeioPagamento[]);
         setAccounts(accs);
+        setPasseios(pass as PasseioOption[]);
         setLoadingOptions(false);
       })
       .catch(() => { if (active) setLoadingOptions(false); });
     return () => { active = false; };
-  }, []);
+  }, [branchCode]);
+
+  useEffect(() => {
+    let active = true;
+
+    fetch(`/api/receivables/${receivable.id}`, { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error("Falha ao carregar passeios da venda.");
+        }
+
+        const data = (await response.json()) as { saleItems?: SaleItem[] };
+        if (!active) return;
+        setSaleItems((data.saleItems ?? []).map((item) => ({ ...item, currency: (item.currency as Currency) ?? receivable.currency })));
+      })
+      .catch(() => {
+        if (active) {
+          setSaleItems([]);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [receivable.id, receivable.currency]);
+
+  function updateSaleItem(index: number, patch: Partial<SaleItem>) {
+    setSaleItems((current) =>
+      current.map((item, itemIndex) => (itemIndex === index ? { ...item, ...patch } : item))
+    );
+    setSubmitAttempted(false);
+  }
+
+  function handleBranchChange(nextBranchCode: BranchCode) {
+    if (nextBranchCode === branchCode) {
+      return;
+    }
+
+    if (saleItems.length > 0) {
+      const confirmed = window.confirm(
+        "Trocar a filial também exige revisar os passeios desta venda. Deseja continuar?"
+      );
+
+      if (!confirmed) {
+        return;
+      }
+    }
+
+    setBranchCode(nextBranchCode);
+    setSaleItems((current) =>
+      current.map((item) => ({
+        ...item,
+        passeioId: "",
+        passeioNome: "",
+      }))
+    );
+  }
 
   function updateInstallmentInput(index: number, patch: Partial<InstallmentInput>) {
     setInstallmentInputs((cur) => cur.map((item, i) => (i === index ? { ...item, ...patch } : item)));
@@ -104,6 +166,7 @@ export function ReceivableEditModal({ receivable, installments, onClose, onUpdat
   }, [totalAmount, installmentsCount]);
 
   function handleSave() {
+    setSubmitAttempted(true);
     setError(null);
 
     if (!customerName.trim()) { setError("Informe o nome do cliente."); return; }
@@ -111,6 +174,10 @@ export function ReceivableEditModal({ receivable, installments, onClose, onUpdat
     if (!totalAmount || Number(totalAmount) <= 0) { setError("Informe um valor total válido."); return; }
     if (installmentInputs.some((inp) => !inp.dueDate)) {
       setError("Informe a data de recebimento para todas as parcelas.");
+      return;
+    }
+    if (saleItems.some((item) => !item.passeioId)) {
+      setError("Selecione um passeio válido em todos os itens da venda.");
       return;
     }
 
@@ -124,6 +191,8 @@ export function ReceivableEditModal({ receivable, installments, onClose, onUpdat
           description: description.trim() || undefined,
           totalAmount: Number(totalAmount),
           currency,
+          branchCode,
+          saleItems,
           sellerId: sellerId || undefined,
           sellerName: (seller?.name ?? sellerName) || undefined,
           fxRateUsdBrl: fxRateUsdBrl ? Number(fxRateUsdBrl) : undefined,
@@ -203,6 +272,15 @@ export function ReceivableEditModal({ receivable, installments, onClose, onUpdat
           </div>
 
           <div className="field">
+            <label>Filial</label>
+            <select value={branchCode} onChange={(e) => handleBranchChange(e.target.value as BranchCode)}>
+              {BRANCHES.map((branch) => (
+                <option key={branch.code} value={branch.code}>{branch.label}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="field">
             <label>Data da venda</label>
             <input type="date" value={saleDate} onChange={(e) => setSaleDate(e.target.value)} />
           </div>
@@ -227,6 +305,68 @@ export function ReceivableEditModal({ receivable, installments, onClose, onUpdat
               placeholder="Descrição opcional"
             />
           </div>
+        </div>
+
+        <div className="form-section-label" style={{ marginTop: 16 }}>Passeios da venda</div>
+        {submitAttempted && saleItems.some((item) => !item.passeioId) ? (
+          <p className="form-error" style={{ marginTop: 0, marginBottom: 10 }}>
+            Existem itens sem passeio selecionado. Corrija antes de salvar.
+          </p>
+        ) : null}
+        <div style={{ display: "grid", gap: 10 }}>
+          {saleItems.length === 0 ? (
+            <p className="subtle" style={{ margin: 0 }}>Sem passeios vinculados nesta venda.</p>
+          ) : (
+            saleItems.map((item, idx) => (
+              <div
+                key={`edit-sale-item-${idx}`}
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1.4fr 1fr",
+                  gap: 12,
+                  padding: 12,
+                  borderRadius: 8,
+                  border: !item.passeioId && submitAttempted ? "1px solid #d1495b" : "1px solid var(--line, #e8e8e8)",
+                  background: "rgba(15,43,69,0.03)",
+                }}
+              >
+                <div className="field" style={{ margin: 0 }}>
+                  <label>Passeio</label>
+                  <select
+                    value={item.passeioId}
+                    onChange={(e) => {
+                      const passeio = passeios.find((p) => p.id === e.target.value);
+                      updateSaleItem(idx, {
+                        passeioId: e.target.value,
+                        passeioNome: passeio?.name ?? "",
+                      });
+                    }}
+                  >
+                    <option value="">Selecione...</option>
+                    {passeios.map((passeio) => (
+                      <option key={passeio.id} value={passeio.id}>{passeio.name}</option>
+                    ))}
+                  </select>
+                  {!item.passeioId && submitAttempted ? (
+                    <span className="form-error" style={{ fontSize: "0.78rem", marginTop: 4, display: "inline-block" }}>
+                      Selecione um passeio para este item.
+                    </span>
+                  ) : null}
+                </div>
+
+                <div className="field" style={{ margin: 0 }}>
+                  <label>Valor item ({currency})</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={item.totalItem}
+                    onChange={(e) => updateSaleItem(idx, { totalItem: Number(e.target.value) || 0 })}
+                  />
+                </div>
+              </div>
+            ))
+          )}
         </div>
 
         {/* ── Parcelamento ── */}

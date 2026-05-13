@@ -262,8 +262,11 @@ export function DashboardMonthInsights({
     .map((branch) => ({
       ...branch,
       currentMonthValueBrl: branch.monthReceivedBrl + branch.monthToReceiveBrl + branch.monthOverdueBrl
-    }))
-    .filter((branch) => branch.currentMonthValueBrl > 0);
+    }));
+
+  const monthReceivedByBranch = data.branchSummaries;
+  const monthToReceiveByBranch = data.branchSummaries;
+  const monthOverdueByBranch = data.branchSummaries;
 
   return (
     <div className="month-insights-wrap">
@@ -313,18 +316,45 @@ export function DashboardMonthInsights({
           <button type="button" className="month-kpi-button" onClick={() => setActiveModal("received")}>
             <span className="subtle">Recebido no mes</span>
             <strong>{formatCurrency(data.monthReceived, "BRL")}</strong>
+            {monthReceivedByBranch.length ? (
+              <span className="subtle" style={{ display: "grid", gap: 2, fontSize: "0.76rem" }}>
+                {monthReceivedByBranch.map((branch) => (
+                  <span key={`received-${branch.branchCode}`}>
+                    {branch.branchLabel}: {formatCurrency(branch.monthReceivedBrl, "BRL")}
+                  </span>
+                ))}
+              </span>
+            ) : null}
             <span className="subtle">Clique para abrir a janela com as parcelas</span>
           </button>
 
           <button type="button" className="month-kpi-button" onClick={() => setActiveModal("toReceive")}>
             <span className="subtle">A receber no mes</span>
             <strong>{formatCurrency(data.monthToReceive, "BRL")}</strong>
+            {monthToReceiveByBranch.length ? (
+              <span className="subtle" style={{ display: "grid", gap: 2, fontSize: "0.76rem" }}>
+                {monthToReceiveByBranch.map((branch) => (
+                  <span key={`to-receive-${branch.branchCode}`}>
+                    {branch.branchLabel}: {formatCurrency(branch.monthToReceiveBrl, "BRL")}
+                  </span>
+                ))}
+              </span>
+            ) : null}
             <span className="subtle">Clique para abrir a janela com as parcelas</span>
           </button>
 
           <button type="button" className="month-kpi-button" onClick={() => setActiveModal("overdue")}>
             <span className="subtle">Em atraso no mes</span>
             <strong>{formatCurrency(data.monthOverdue, "BRL")}</strong>
+            {monthOverdueByBranch.length ? (
+              <span className="subtle" style={{ display: "grid", gap: 2, fontSize: "0.76rem" }}>
+                {monthOverdueByBranch.map((branch) => (
+                  <span key={`overdue-${branch.branchCode}`}>
+                    {branch.branchLabel}: {formatCurrency(branch.monthOverdueBrl, "BRL")}
+                  </span>
+                ))}
+              </span>
+            ) : null}
             <span className="subtle">Clique para abrir a janela com as parcelas</span>
           </button>
         </div>

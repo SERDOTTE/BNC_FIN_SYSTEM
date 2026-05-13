@@ -110,6 +110,7 @@ export function ReceivableCreateForm({ onCreated }: ReceivableCreateFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [feedback, setFeedback] = useState<string>("");
+  const [submitAttempted, setSubmitAttempted] = useState(false);
   const [currency, setCurrency] = useState<Currency>("USD");
   const [branchCode, setBranchCode] = useState<BranchCode>("CANCUN");
   const [sellers, setSellers] = useState<LookupOption[]>([]);
@@ -124,6 +125,7 @@ const [meiosPagamento, setMeiosPagamento] = useState<MeioPagamento[]>([]);
   const [fornecedorTargetIndex, setFornecedorTargetIndex] = useState<number | null>(null);
   const [activeFornecedorIndex, setActiveFornecedorIndex] = useState(0);
   const [installmentsCount, setInstallmentsCount] = useState(1);
+  const [discountPercentInput, setDiscountPercentInput] = useState("");
 
   // Estado global de pagamento (usado apenas quando installmentsCount === 1)
   const [globalMeioId, setGlobalMeioId] = useState("");
@@ -256,9 +258,33 @@ const [meiosPagamento, setMeiosPagamento] = useState<MeioPagamento[]>([]);
     setItems((cur) => cur.map((item) => ({ ...item, currency })));
   }, [currency]);
 
-  const totalVenda = useMemo(
+  const totalVendaBruta = useMemo(
     () => Math.round(items.reduce((s, i) => s + i.totalItem, 0) * 100) / 100,
     [items]
+  );
+
+  const descontoPercentual = useMemo(() => {
+    const normalized = discountPercentInput.trim().replace(",", ".");
+    if (!normalized) {
+      return 0;
+    }
+
+    const parsed = Number(normalized);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      return 0;
+    }
+
+    return Math.min(parsed, 100);
+  }, [discountPercentInput]);
+
+  const valorDesconto = useMemo(
+    () => Math.round(totalVendaBruta * (descontoPercentual / 100) * 100) / 100,
+    [totalVendaBruta, descontoPercentual]
+  );
+
+  const totalVenda = useMemo(
+    () => Math.max(0, Math.round((totalVendaBruta - valorDesconto) * 100) / 100),
+    [totalVendaBruta, valorDesconto]
   );
 
   const installmentAmounts = useMemo(
@@ -278,6 +304,7 @@ const [meiosPagamento, setMeiosPagamento] = useState<MeioPagamento[]>([]);
 
   function handleItemChange(index: number, value: SaleItem) {
     setItems((cur) => cur.map((item, i) => (i === index ? value : item)));
+    setSubmitAttempted(false);
   }
 
   function handleItemRemove(index: number) {
@@ -363,12 +390,14 @@ const [meiosPagamento, setMeiosPagamento] = useState<MeioPagamento[]>([]);
     form.reset();
     setCurrency("USD");
     setBranchCode("CANCUN");
+    setDiscountPercentInput("");
     setInstallmentsCount(1);
     setInstallmentInputs([emptyInstallmentInput()]);
     setGlobalMeioId("");
     setGlobalMeioTipo("");
     setGlobalAccountId("");
     setItems([emptyItem("USD")]);
+    setSubmitAttempted(false);
     setIsOpen(false);
     setIsFornecedorModalOpen(false);
     setFornecedorTargetIndex(null);
@@ -377,6 +406,7 @@ const [meiosPagamento, setMeiosPagamento] = useState<MeioPagamento[]>([]);
 
   function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setSubmitAttempted(true);
     const form = event.currentTarget;
     const formData = new FormData(form);
 
@@ -573,26 +603,76 @@ const [meiosPagamento, setMeiosPagamento] = useState<MeioPagamento[]>([]);
           </div>
 
           <div className="field full">
+            {submitAttempted && items.some((item) => !item.passeioId || !item.fornecedorId) ? (
+              <p className="form-error" style={{ marginTop: 0, marginBottom: 8 }}>
+                Existem itens sem passeio e/ou fornecedor. Complete os campos destacados.
+              </p>
+            ) : null}
+
             {items.map((item, idx) => (
-              <SaleItemRow
+              <div
                 key={idx}
-                index={idx}
-                passeios={passeios}
-                fornecedores={fornecedores}
-                currency={currency}
-                value={item}
-                onChange={handleItemChange}
-                onRemove={handleItemRemove}
-                onFornecedorFocus={setActiveFornecedorIndex}
-                onAddFornecedor={openFornecedorModal}
-                showAddFornecedorButton={idx === 0}
-                showRemove={items.length > 1}
-              />
+                style={{
+                  border: submitAttempted && (!item.passeioId || !item.fornecedorId) ? "1px solid #d1495b" : "1px solid transparent",
+                  borderRadius: 8,
+                  padding: 6,
+                  marginBottom: 6,
+                }}
+              >
+                <SaleItemRow
+                  index={idx}
+                  passeios={passeios}
+                  fornecedores={fornecedores}
+                  currency={currency}
+                  value={item}
+                  onChange={handleItemChange}
+                  onRemove={handleItemRemove}
+                  onFornecedorFocus={setActiveFornecedorIndex}
+                  onAddFornecedor={openFornecedorModal}
+                  showAddFornecedorButton={idx === 0}
+                  showRemove={items.length > 1}
+                />
+
+                {submitAttempted && (!item.passeioId || !item.fornecedorId) ? (
+                  <span className="form-error" style={{ fontSize: "0.78rem", marginLeft: 4 }}>
+                    {!item.passeioId && !item.fornecedorId
+                      ? "Selecione passeio e fornecedor."
+                      : !item.passeioId
+                        ? "Selecione o passeio."
+                        : "Selecione o fornecedor."}
+                  </span>
+                ) : null}
+              </div>
             ))}
-            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8, borderTop: "1px solid var(--line)", paddingTop: 10 }}>
-              <span style={{ fontWeight: 700, fontSize: "1.05rem" }}>
-                Total da venda: {currency} {totalVenda.toFixed(2)}
+            <div className="field" style={{ marginTop: 8, maxWidth: 280 }}>
+              <label htmlFor="rec-discount-percent">Desconto (%)</label>
+              <input
+                id="rec-discount-percent"
+                name="discountPercent"
+                type="number"
+                min="0"
+                max="100"
+                step="0.01"
+                value={discountPercentInput}
+                onChange={(e) => setDiscountPercentInput(e.target.value)}
+                placeholder="0"
+              />
+              <span className="subtle" style={{ fontSize: "0.78rem" }}>
+                Se vazio, o desconto considerado sera 0%.
               </span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8, borderTop: "1px solid var(--line)", paddingTop: 10 }}>
+              <div style={{ display: "grid", gap: 4, textAlign: "right" }}>
+                <span className="subtle" style={{ fontSize: "0.86rem" }}>
+                  Total bruto: {currency} {totalVendaBruta.toFixed(2)}
+                </span>
+                <span className="subtle" style={{ fontSize: "0.86rem" }}>
+                  Desconto ({descontoPercentual.toFixed(2)}%): - {currency} {valorDesconto.toFixed(2)}
+                </span>
+                <span style={{ fontWeight: 700, fontSize: "1.05rem" }}>
+                  Total final: {currency} {totalVenda.toFixed(2)}
+                </span>
+              </div>
             </div>
           </div>
 

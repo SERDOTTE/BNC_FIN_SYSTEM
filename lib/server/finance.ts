@@ -71,14 +71,48 @@ function isOverdueByDate(status: string, dueDate: string | undefined, todayIso: 
 
 async function selectWithCompany<T extends SupabaseRow>(path: string): Promise<T[]> {
   const companyId = companyIdFromEnv();
+  if (!companyId) {
+    return supabaseSelect<T>(path);
+  }
+
   const separator = path.includes("?") ? "&" : "?";
-  const fullPath = companyId ? `${path}${separator}company_id=eq.${encodeURIComponent(companyId)}` : path;
-  return supabaseSelect<T>(fullPath);
+  const [companyRows, legacyRows] = await Promise.all([
+    supabaseSelect<T>(`${path}${separator}company_id=eq.${encodeURIComponent(companyId)}`),
+    supabaseSelect<T>(`${path}${separator}company_id=is.null`).catch(() => [] as T[])
+  ]);
+
+  const byId = new Map<string, T>();
+
+  for (const row of companyRows) {
+    const id = readFirstString(row, ["id"]);
+    if (id) {
+      byId.set(id, row);
+      continue;
+    }
+
+    byId.set(JSON.stringify(row), row);
+  }
+
+  for (const row of legacyRows) {
+    const id = readFirstString(row, ["id"]);
+    if (id && byId.has(id)) {
+      continue;
+    }
+
+    if (id) {
+      byId.set(id, row);
+      continue;
+    }
+
+    byId.set(`legacy-${JSON.stringify(row)}`, row);
+  }
+
+  return Array.from(byId.values());
 }
 
 async function getInstallments() {
   return selectWithCompany<InstallmentRow>(
-    "receivable_installments?select=*,receivables(id,customer_name,sale_code,sale_number)&order=due_date.asc"
+    "receivable_installments?select=*,receivables(id,customer_name,sale_code,sale_number,branch_code,branch_name)&order=due_date.asc"
   );
 }
 
@@ -133,6 +167,23 @@ function resolveBranchFromRow(row: SupabaseRow) {
   return resolveBranchDefinition(row.branch_code ?? row.branch_name) ?? fallbackBranchDefinition();
 }
 
+function resolveBranchFromInstallmentRow(installment: InstallmentRow, receivableFromLookup?: SupabaseRow | null) {
+  const direct = resolveBranchDefinition(installment.branch_code ?? installment.branch_name);
+  if (direct) {
+    return direct;
+  }
+
+  if (receivableFromLookup) {
+    const fromLookup = resolveBranchDefinition(receivableFromLookup.branch_code ?? receivableFromLookup.branch_name);
+    if (fromLookup) {
+      return fromLookup;
+    }
+  }
+
+  const receivable = (installment.receivables as SupabaseRow | null) ?? {};
+  return resolveBranchFromRow(receivable);
+}
+
 function getBranchSummary(map: BranchSummaryMap, branchCode: string, branchLabel: string) {
   const key = branchCode || branchLabel;
   const existing = map.get(key);
@@ -166,6 +217,14 @@ export async function buildDashboardMonthlyBreakdown(month: number, year: number
     )
   ]);
 
+  const receivableLookup = new Map<string, SupabaseRow>();
+  for (const receivableRow of receivables) {
+    const receivableId = readFirstString(receivableRow, ["id"]);
+    if (receivableId) {
+      receivableLookup.set(receivableId, receivableRow);
+    }
+  }
+
   const installmentsReceived: DashboardMonthlyInstallmentDetail[] = [];
   const installmentsToReceive: DashboardMonthlyInstallmentDetail[] = [];
   const installmentsOverdue: DashboardMonthlyInstallmentDetail[] = [];
@@ -181,16 +240,18 @@ export async function buildDashboardMonthlyBreakdown(month: number, year: number
     const rawStatus = readFirstString(row, ["status"]) || "PENDING";
     const isLate = isOverdueByDate(rawStatus, dueDate, todayIso);
     const status = (isLate ? "OVERDUE" : rawStatus) as DashboardMonthlyInstallmentDetail["status"];
+    const effectivePaymentDate = status === "PAID" ? (paymentDate || dueDate) : paymentDate;
     const dueMonthKey = dueDate ? monthKey(dueDate) : "";
-    const paymentMonthKey = paymentDate ? monthKey(paymentDate) : "";
+    const paymentMonthKey = effectivePaymentDate ? monthKey(effectivePaymentDate) : "";
     const amountBrl = readInstallmentAmountBrl(row);
-    const receivable = (row.receivables as SupabaseRow | null) ?? {};
-    const branch = resolveBranchFromRow(receivable);
+    const receivableId = readFirstString(row, ["receivable_id"]);
+    const receivable = receivableLookup.get(receivableId) ?? ((row.receivables as SupabaseRow | null) ?? {});
+    const branch = resolveBranchFromInstallmentRow(row, receivable);
     const branchSummary = getBranchSummary(branchSummaries, branch.code, branch.label);
 
     const detail: DashboardMonthlyInstallmentDetail = {
       installmentId: readFirstString(row, ["id"]),
-      receivableId: readFirstString(row, ["receivable_id"]),
+      receivableId,
       branchCode: branch.code,
       branchLabel: branch.label,
       customerName: readFirstString(receivable, ["customer_name"]),
@@ -198,7 +259,7 @@ export async function buildDashboardMonthlyBreakdown(month: number, year: number
       saleNumber: readNumber(receivable, ["sale_number"]) || undefined,
       installmentNumber: readNumber(row, ["installment_number"]),
       dueDate,
-      paymentDate: paymentDate || undefined,
+      paymentDate: effectivePaymentDate || undefined,
       amountBrl,
       status
     };
@@ -251,6 +312,7 @@ export async function buildDashboardMonthlyBreakdown(month: number, year: number
     const saleInstallments = allSaleInstallments.filter(
       (item) => (readFirstString(item, ["status"]) || "PENDING") !== "CANCELED"
     );
+    const totalSaleBrl = Number(readReceivableTotalBrl(row, allSaleInstallments).toFixed(2));
 
     let projectedReceiptsBrl = 0;
     let receivedBrl = 0;
@@ -273,6 +335,11 @@ export async function buildDashboardMonthlyBreakdown(month: number, year: number
       }
     }
 
+    if (saleInstallments.length === 0) {
+      projectedReceiptsBrl = totalSaleBrl;
+      pendingBrl = totalSaleBrl;
+    }
+
     sales.push({
       receivableId: readFirstString(row, ["id"]),
       branchCode: branch.code,
@@ -283,7 +350,7 @@ export async function buildDashboardMonthlyBreakdown(month: number, year: number
       saleDate,
       status,
       installmentsCount: saleInstallments.length,
-      totalSaleBrl: Number(allSaleInstallments.reduce((sum, item) => sum + readInstallmentAmountBrl(item), 0).toFixed(2)),
+      totalSaleBrl,
       projectedReceiptsBrl: Number(projectedReceiptsBrl.toFixed(2)),
       receivedBrl: Number(receivedBrl.toFixed(2)),
       pendingBrl: Number(pendingBrl.toFixed(2)),
@@ -291,7 +358,7 @@ export async function buildDashboardMonthlyBreakdown(month: number, year: number
     });
 
     branchSummary.salesCount += 1;
-    branchSummary.totalSalesBrl += Number(allSaleInstallments.reduce((sum, item) => sum + readInstallmentAmountBrl(item), 0).toFixed(2));
+    branchSummary.totalSalesBrl += totalSaleBrl;
     branchSummary.projectedReceiptsBrl += Number(projectedReceiptsBrl.toFixed(2));
   }
 
@@ -328,12 +395,21 @@ export async function buildDashboardMonthlyBreakdown(month: number, year: number
 }
 
 export async function buildDashboardData(): Promise<DashboardData> {
-  const [installments, payables, transactions, currentUsdRate] = await Promise.all([
+  const [installments, payables, transactions, currentUsdRate, receivableRows] = await Promise.all([
     getInstallments(),
     getPayables(),
     getTransactions(),
-    getLatestUsdRate()
+    getLatestUsdRate(),
+    selectWithCompany<SupabaseRow>("receivables?select=id,customer_name,branch_code,branch_name")
   ]);
+
+  const receivableLookup = new Map<string, SupabaseRow>();
+  for (const receivableRow of receivableRows) {
+    const receivableId = readFirstString(receivableRow, ["id"]);
+    if (receivableId) {
+      receivableLookup.set(receivableId, receivableRow);
+    }
+  }
 
   const today = new Date();
   const todayIso = formatDate(today);
@@ -364,7 +440,9 @@ export async function buildDashboardData(): Promise<DashboardData> {
     const status = readFirstString(row, ["status"]);
     const amount = mapInstallmentAmount(row);
     const currency = readCurrency(row, ["currency"]);
-    const customerName = readFirstString((row.receivables as SupabaseRow | null) ?? {}, ["customer_name"]);
+    const receivableId = readFirstString(row, ["receivable_id"]);
+    const receivable = receivableLookup.get(receivableId) ?? ((row.receivables as SupabaseRow | null) ?? {});
+    const customerName = readFirstString(receivable, ["customer_name"]);
     const countsAsScheduledInflow = status !== "CANCELED";
 
     if (status === "OVERDUE" || (status === "PENDING" && dueDate && dueDate < todayIso)) {
@@ -375,7 +453,7 @@ export async function buildDashboardData(): Promise<DashboardData> {
     const isPaid = status === "PAID";
     const isCanceled = status === "CANCELED";
     const isLate = status === "OVERDUE" || ((status === "PENDING" || status === "OPEN" || status === "PARTIALLY_PAID") && dueDate && dueDate < todayIso);
-    const paidInCurrentMonth = isPaid && paymentDate && monthKey(paymentDate) === currentMonth;
+    const paidInCurrentMonth = isPaid && monthKey(paymentDate || dueDate) === currentMonth;
 
     if (paidInCurrentMonth) {
       monthReceived += amount;

@@ -339,6 +339,7 @@ export async function POST(request: NextRequest) {
       await supabaseInsert("receivable_installments", {
         company_id: companyId,
         receivable_id: receivableRow.id,
+        branch_code: branch.code,
         installment_number: i + 1,
         amount: installmentAmount,
         amount_contract: installmentAmount,
@@ -355,6 +356,7 @@ export async function POST(request: NextRequest) {
       await supabaseInsert("sale_items", {
         company_id: companyId,
         receivable_id: receivableRow.id,
+        branch_code: branch.code,
         passeio_id: item.passeioId,
         passeio_nome: item.passeioNome,
         fornecedor_id: item.fornecedorId,

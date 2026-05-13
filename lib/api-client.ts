@@ -184,6 +184,7 @@ export async function updateReceivableStatus(
 export async function updateReceivable(
   receivableId: string,
   payload: {
+    branchCode?: "CANCUN" | "PUNTA_CANA";
     customerName?: string;
     description?: string;
     saleDate?: string;
@@ -193,6 +194,18 @@ export async function updateReceivable(
     sellerName?: string;
     fxRateUsdBrl?: number;
     installmentsCount?: number;
+    saleItems?: Array<{
+      passeioId: string;
+      passeioNome: string;
+      fornecedorId?: string;
+      fornecedorNome?: string;
+      adultos?: number;
+      criancas?: number;
+      custoUnitarioAdulto?: number;
+      custoUnitarioCrianca?: number;
+      totalItem?: number;
+      currency?: string;
+    }>;
     installmentInputs?: Array<{
       dueDate: string;
       meioPagamentoId?: string;

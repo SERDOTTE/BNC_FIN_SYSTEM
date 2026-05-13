@@ -20,7 +20,14 @@ export function normalizeBranchCode(value: unknown): BranchCode | null {
   if (typeof value !== "string") return null;
   const normalized = value.trim().toUpperCase();
   if (normalized === "CANCUN") return "CANCUN";
-  if (normalized === "PUNTA_CANA" || normalized === "PUNTA CANA" || normalized === "PUNTACANA") {
+  if (
+    normalized === "PUNTA_CANA" ||
+    normalized === "PUNTA CANA" ||
+    normalized === "PUNTA-CANA" ||
+    normalized === "PUNTACANA" ||
+    normalized === "PUNTA" ||
+    normalized === "PCN"
+  ) {
     return "PUNTA_CANA";
   }
   return null;
