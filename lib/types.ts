@@ -116,6 +116,8 @@ export type DashboardMonthlyInstallmentDetail = {
   branchCode: BranchCode;
   branchLabel: string;
   customerName: string;
+  sellerId?: string;
+  sellerName?: string;
   saleCode?: string;
   saleNumber?: number;
   installmentNumber: number;
@@ -130,16 +132,31 @@ export type DashboardMonthlySaleDetail = {
   branchCode: BranchCode;
   branchLabel: string;
   customerName: string;
+  sellerId?: string;
+  sellerName?: string;
   saleCode?: string;
   saleNumber?: number;
   saleDate: string;
   status: Receivable["status"];
   installmentsCount: number;
+  fxRateUsdBrl: number;
+  totalSaleUsd: number;
   totalSaleBrl: number;
+  receivableInMonthBrl: number;
   projectedReceiptsBrl: number;
   receivedBrl: number;
   pendingBrl: number;
   overdueBrl: number;
+};
+
+export type DashboardSellerMonthlySummary = {
+  sellerId?: string;
+  sellerName: string;
+  salesCount: number;
+  averageUsdRate: number;
+  totalSalesUsd: number;
+  totalSalesBrl: number;
+  receivableInMonthBrl: number;
 };
 
 export type DashboardBranchMonthlySummary = {
@@ -163,9 +180,11 @@ export type DashboardMonthlyBreakdown = {
   installmentsToReceive: DashboardMonthlyInstallmentDetail[];
   installmentsOverdue: DashboardMonthlyInstallmentDetail[];
   salesCount: number;
+  totalSalesMonthUsd: number;
   totalSalesMonthBrl: number;
   projectedReceiptsMonthBrl: number;
   branchSummaries: DashboardBranchMonthlySummary[];
+  sellerSummaries: DashboardSellerMonthlySummary[];
   sales: DashboardMonthlySaleDetail[];
 };
 

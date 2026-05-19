@@ -1,5 +1,6 @@
 import { DashboardDailyFlowChart } from "@/components/dashboard-daily-flow-chart";
 import { DashboardMonthInsights } from "@/components/dashboard-month-insights";
+import { DashboardSellerSales } from "@/components/dashboard-seller-sales";
 import { PageHeader } from "@/components/page-header";
 import { SectionCard } from "@/components/section-card";
 import { StatCard } from "@/components/stat-card";
@@ -44,6 +45,12 @@ export default async function HomePage() {
           />
         </div>
       </section>
+
+      <DashboardSellerSales
+        initialMonth={month}
+        initialYear={year}
+        initialData={monthlyBreakdown}
+      />
 
       <SectionCard
         title="Fluxo de caixa do mês"

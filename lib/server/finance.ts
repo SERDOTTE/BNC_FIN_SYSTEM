@@ -7,6 +7,7 @@ import type {
   DashboardMonthlyBreakdown,
   DashboardMonthlyInstallmentDetail,
   DashboardMonthlySaleDetail,
+  DashboardSellerMonthlySummary,
   ReportsData
 } from "@/lib/types";
 import { fallbackBranchDefinition, resolveBranchDefinition } from "@/lib/branches";
@@ -25,6 +26,7 @@ type InstallmentRow = SupabaseRow & {
 };
 
 type BranchSummaryMap = Map<string, DashboardBranchMonthlySummary>;
+type SellerSummaryMap = Map<string, DashboardSellerMonthlySummary & { usdRateSamples: number[] }>;
 
 type FlowBucket = {
   inflow: number;
@@ -163,6 +165,23 @@ function readReceivableTotalBrl(receivable: SupabaseRow, installments: Installme
   return installments.reduce((sum, item) => sum + readInstallmentAmountBrl(item), 0);
 }
 
+function readReceivableTotalUsd(receivable: SupabaseRow, totalBrl: number, fallbackUsdRate: number) {
+  const currency = readCurrency(receivable, ["currency"]);
+  const totalAmount = readNumber(receivable, ["total_amount"]);
+  const fxRate = readNumber(receivable, ["fx_rate_usd_brl"]);
+  const usableRate = fxRate > 0 ? fxRate : fallbackUsdRate;
+
+  if (currency === "USD") {
+    return totalAmount;
+  }
+
+  if (usableRate > 0) {
+    return Number((totalBrl / usableRate).toFixed(2));
+  }
+
+  return 0;
+}
+
 function resolveBranchFromRow(row: SupabaseRow) {
   return resolveBranchDefinition(row.branch_code ?? row.branch_name) ?? fallbackBranchDefinition();
 }
@@ -206,9 +225,32 @@ function getBranchSummary(map: BranchSummaryMap, branchCode: string, branchLabel
   return summary;
 }
 
+function getSellerSummary(map: SellerSummaryMap, sellerId: string, sellerName: string) {
+  const key = sellerId || sellerName || "SEM_VENDEDOR";
+  const existing = map.get(key);
+  if (existing) {
+    return existing;
+  }
+
+  const summary: DashboardSellerMonthlySummary & { usdRateSamples: number[] } = {
+    sellerId: sellerId || undefined,
+    sellerName: sellerName || "Sem vendedor",
+    salesCount: 0,
+    averageUsdRate: 0,
+    totalSalesUsd: 0,
+    totalSalesBrl: 0,
+    receivableInMonthBrl: 0,
+    usdRateSamples: []
+  };
+
+  map.set(key, summary);
+  return summary;
+}
+
 export async function buildDashboardMonthlyBreakdown(month: number, year: number): Promise<DashboardMonthlyBreakdown> {
   const selectedMonthKey = toMonthKeyByNumber(month, year);
   const todayIso = formatDate(new Date());
+  const latestUsdRate = await getLatestUsdRate();
 
   const [installments, receivables] = await Promise.all([
     getInstallments(),
@@ -229,6 +271,7 @@ export async function buildDashboardMonthlyBreakdown(month: number, year: number
   const installmentsToReceive: DashboardMonthlyInstallmentDetail[] = [];
   const installmentsOverdue: DashboardMonthlyInstallmentDetail[] = [];
   const branchSummaries = new Map<string, DashboardBranchMonthlySummary>();
+  const sellerSummaries: SellerSummaryMap = new Map();
 
   let monthReceived = 0;
   let monthToReceive = 0;
@@ -255,6 +298,8 @@ export async function buildDashboardMonthlyBreakdown(month: number, year: number
       branchCode: branch.code,
       branchLabel: branch.label,
       customerName: readFirstString(receivable, ["customer_name"]),
+      sellerId: readFirstString(receivable, ["seller_id"]) || undefined,
+      sellerName: readFirstString(receivable, ["seller_name"]) || undefined,
       saleCode: readFirstString(receivable, ["sale_code"]) || undefined,
       saleNumber: readNumber(receivable, ["sale_number"]) || undefined,
       installmentNumber: readNumber(row, ["installment_number"]),
@@ -307,25 +352,35 @@ export async function buildDashboardMonthlyBreakdown(month: number, year: number
 
     const branch = resolveBranchFromRow(row);
     const branchSummary = getBranchSummary(branchSummaries, branch.code, branch.label);
+    const sellerId = readFirstString(row, ["seller_id"]);
+    const sellerName = readFirstString(row, ["seller_name"]);
+    const sellerSummary = getSellerSummary(sellerSummaries, sellerId, sellerName);
 
     const allSaleInstallments = ((row.receivable_installments as InstallmentRow[] | undefined) ?? []);
     const saleInstallments = allSaleInstallments.filter(
       (item) => (readFirstString(item, ["status"]) || "PENDING") !== "CANCELED"
     );
     const totalSaleBrl = Number(readReceivableTotalBrl(row, allSaleInstallments).toFixed(2));
+    const fxRateUsdBrl = readNumber(row, ["fx_rate_usd_brl"]);
+    const totalSaleUsd = Number(readReceivableTotalUsd(row, totalSaleBrl, latestUsdRate).toFixed(2));
 
     let projectedReceiptsBrl = 0;
     let receivedBrl = 0;
     let pendingBrl = 0;
     let overdueBrl = 0;
+    let receivableInMonthBrl = 0;
 
     for (const installment of saleInstallments) {
       const amountBrl = readInstallmentAmountBrl(installment);
       const installmentStatus = readFirstString(installment, ["status"]) || "PENDING";
       const installmentDueDate = toIsoDate(installment.due_date);
+      const dueMonthKey = installmentDueDate ? monthKey(installmentDueDate) : "";
       const isLate = isOverdueByDate(installmentStatus, installmentDueDate, todayIso);
 
       projectedReceiptsBrl += amountBrl;
+      if (installmentStatus !== "CANCELED" && dueMonthKey === selectedMonthKey) {
+        receivableInMonthBrl += amountBrl;
+      }
       if (installmentStatus === "PAID") {
         receivedBrl += amountBrl;
       } else if (isLate) {
@@ -345,12 +400,17 @@ export async function buildDashboardMonthlyBreakdown(month: number, year: number
       branchCode: branch.code,
       branchLabel: branch.label,
       customerName: readFirstString(row, ["customer_name"]),
+      sellerId,
+      sellerName,
       saleCode: readFirstString(row, ["sale_code"]) || undefined,
       saleNumber: readNumber(row, ["sale_number"]) || undefined,
       saleDate,
       status,
       installmentsCount: saleInstallments.length,
+      fxRateUsdBrl,
+      totalSaleUsd,
       totalSaleBrl,
+      receivableInMonthBrl: Number(receivableInMonthBrl.toFixed(2)),
       projectedReceiptsBrl: Number(projectedReceiptsBrl.toFixed(2)),
       receivedBrl: Number(receivedBrl.toFixed(2)),
       pendingBrl: Number(pendingBrl.toFixed(2)),
@@ -360,11 +420,23 @@ export async function buildDashboardMonthlyBreakdown(month: number, year: number
     branchSummary.salesCount += 1;
     branchSummary.totalSalesBrl += totalSaleBrl;
     branchSummary.projectedReceiptsBrl += Number(projectedReceiptsBrl.toFixed(2));
+
+    sellerSummary.salesCount += 1;
+    sellerSummary.totalSalesBrl += totalSaleBrl;
+    sellerSummary.totalSalesUsd += totalSaleUsd;
+    sellerSummary.receivableInMonthBrl += Number(receivableInMonthBrl.toFixed(2));
+    if (fxRateUsdBrl > 0) {
+      sellerSummary.usdRateSamples.push(fxRateUsdBrl);
+    }
   }
 
   sales.sort((left, right) => left.saleDate.localeCompare(right.saleDate));
 
   const totalSalesMonthBrl = sales.reduce((sum, item) => sum + item.totalSaleBrl, 0);
+  const totalSalesMonthUsd = sales.reduce((sum, item) => {
+    const receivable = receivableLookup.get(item.receivableId) ?? {};
+    return sum + readReceivableTotalUsd(receivable, item.totalSaleBrl, latestUsdRate);
+  }, 0);
   const projectedReceiptsMonthBrl = sales.reduce((sum, item) => sum + item.projectedReceiptsBrl, 0);
   const branchSummaryList = Array.from(branchSummaries.values())
     .map((item) => ({
@@ -377,6 +449,20 @@ export async function buildDashboardMonthlyBreakdown(month: number, year: number
     }))
     .sort((left, right) => left.branchLabel.localeCompare(right.branchLabel));
 
+  const sellerSummaryList: DashboardSellerMonthlySummary[] = Array.from(sellerSummaries.values())
+    .map((item) => ({
+      sellerId: item.sellerId,
+      sellerName: item.sellerName,
+      salesCount: item.salesCount,
+      averageUsdRate: item.usdRateSamples.length
+        ? Number((item.usdRateSamples.reduce((sum, rate) => sum + rate, 0) / item.usdRateSamples.length).toFixed(4))
+        : 0,
+      totalSalesUsd: Number(item.totalSalesUsd.toFixed(2)),
+      totalSalesBrl: Number(item.totalSalesBrl.toFixed(2)),
+      receivableInMonthBrl: Number(item.receivableInMonthBrl.toFixed(2))
+    }))
+    .sort((left, right) => left.sellerName.localeCompare(right.sellerName, "pt-BR"));
+
   return {
     month,
     year,
@@ -387,9 +473,11 @@ export async function buildDashboardMonthlyBreakdown(month: number, year: number
     installmentsToReceive,
     installmentsOverdue,
     salesCount: sales.length,
+    totalSalesMonthUsd: Number(totalSalesMonthUsd.toFixed(2)),
     totalSalesMonthBrl: Number(totalSalesMonthBrl.toFixed(2)),
     projectedReceiptsMonthBrl: Number(projectedReceiptsMonthBrl.toFixed(2)),
     branchSummaries: branchSummaryList,
+    sellerSummaries: sellerSummaryList,
     sales
   };
 }
