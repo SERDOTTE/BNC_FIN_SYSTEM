@@ -362,7 +362,6 @@ export function DashboardMonthInsights({
 
       <aside className="month-sales-panel">
         <span className="chip warning">Resumo de vendas</span>
-        <strong>{formatCurrency(data.totalSalesMonthUsd, "USD")}</strong>
         <strong>{formatCurrency(data.totalSalesMonthBrl, "BRL")}</strong>
         <span className="subtle">Total de vendas realizadas em {monthLabel} / {year}</span>
 

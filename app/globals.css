@@ -375,6 +375,11 @@ textarea {
   box-shadow: 0 12px 24px rgba(13, 74, 120, 0.08);
 }
 
+.month-branch-breakdown {
+  display: grid;
+  gap: 4px;
+}
+
 .month-sales-panel {
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.72);
