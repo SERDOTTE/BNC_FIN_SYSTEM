@@ -1128,6 +1128,32 @@ tr:last-child td {
   background: rgba(255, 255, 255, 0.7);
 }
 
+.content-login {
+  display: grid;
+  place-items: start center;
+}
+
+.login-page {
+  width: 100%;
+  display: grid;
+  justify-items: center;
+}
+
+.login-card {
+  width: min(460px, 100%);
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.84);
+  border-radius: 18px;
+  box-shadow: 0 18px 40px rgba(13, 74, 120, 0.1);
+  padding: 22px;
+  display: grid;
+  gap: 12px;
+}
+
+.login-card .form-grid {
+  grid-template-columns: 1fr;
+}
+
 @media (max-width: 1100px) {
   .app-shell,
   .hero,
@@ -1178,5 +1204,10 @@ tr:last-child td {
 
   .daily-flow-selectors .field {
     min-width: 100%;
+  }
+
+  .login-card {
+    width: 100%;
+    padding: 18px;
   }
 }
