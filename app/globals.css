@@ -150,6 +150,14 @@ textarea {
   gap: 14px;
 }
 
+.trip-kpi-filter-bar {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
 .trip-kpi-card {
   background: #fff;
   border: 1px solid #e2e8f0;
@@ -165,7 +173,7 @@ textarea {
   display: flex;
   justify-content: space-between;
   gap: 8px;
-  align-items: flex-start;
+  align-items: center;
 }
 
 .trip-kpi-head h3 {
@@ -175,16 +183,28 @@ textarea {
 }
 
 .trip-kpi-badge {
-  width: 44px;
-  height: 44px;
-  border-radius: 999px;
+  width: 46px;
+  height: 46px;
+  min-width: 46px;
+  min-height: 46px;
+  border-radius: 50%;
   background: #edf2ff;
+  border: 1px solid #8597a8; 
   color: #4f46e5;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  margin-left: auto;
+  overflow: hidden;
   font-size: 0.74rem;
   font-weight: 700;
+}
+
+.trip-kpi-icon {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+  display: block;
 }
 
 .trip-kpi-card strong {
@@ -194,9 +214,45 @@ textarea {
   color: #111827;
 }
 
+.trip-kpi-value-button {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+}
+
+.trip-kpi-value-button:hover strong {
+  text-decoration: underline;
+}
+
 .trip-kpi-card p {
   margin: 8px 0 0;
   font-size: 0.98rem;
+}
+
+.trip-kpi-branches {
+  margin-top: 8px;
+  display: grid;
+  gap: 2px;
+}
+
+.trip-kpi-branches .subtle {
+  line-height: 1.35;
+}
+
+.trip-kpi-modal-groups {
+  display: grid;
+  gap: 16px;
+}
+
+.trip-kpi-modal-section {
+  display: grid;
+  gap: 8px;
+}
+
+.trip-kpi-modal-section h4 {
+  margin: 0;
 }
 
 .seller-sales-card {

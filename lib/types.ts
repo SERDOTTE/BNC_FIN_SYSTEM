@@ -121,6 +121,7 @@ export type DashboardMonthlyInstallmentDetail = {
   saleCode?: string;
   saleNumber?: number;
   installmentNumber: number;
+  totalInstallments: number;
   dueDate: string;
   paymentDate?: string;
   amountBrl: number;

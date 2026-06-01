@@ -303,6 +303,10 @@ export async function buildDashboardMonthlyBreakdown(month: number, year: number
       saleCode: readFirstString(receivable, ["sale_code"]) || undefined,
       saleNumber: readNumber(receivable, ["sale_number"]) || undefined,
       installmentNumber: readNumber(row, ["installment_number"]),
+      totalInstallments:
+        readNumber(receivable, ["installments_count"]) ||
+        (((receivable.receivable_installments as InstallmentRow[] | undefined) ?? [])
+          .filter((item) => (readFirstString(item, ["status"]) || "PENDING") !== "CANCELED").length || 1),
       dueDate,
       paymentDate: effectivePaymentDate || undefined,
       amountBrl,
